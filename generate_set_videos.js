@@ -4,8 +4,9 @@ const path = require('path');
 const dir = require('node-dir');
 const slp = require('slp-parser-js');
 
-const INPUT_DIRECTORY = '/home/kjs/Projects/smash/slippi/slp_files/copies/sets';
+const INPUT_DIRECTORY = '/home/kjs/Projects/slp-to-video/test';
 const OUTPUT_DIRECTORY = '/home/kjs/Projects/smash/videos/sets';
+const DOLPHIN_PATH = '/home/kjs/Projects/Ishiiruka/build/Binaries/dolphin-emu';
 const NUM_PROCESSES = 2
 
 
@@ -23,11 +24,8 @@ const generateReplayConfig = (file) => {
     let configFn = file.replace(INPUT_DIRECTORY, OUTPUT_DIRECTORY);
     let parsed = path.parse(configFn);
     configFn = path.join(parsed.dir, `${metadata.startAt}.json`);
-    fs.mkdir(parsed.dir, { recursive: true }, (err) => {
-        fs.writeFile(configFn, JSON.stringify(config), (err) => {
-            if (err) throw err;
-        });
-    });
+    fs.mkdirSync(parsed.dir, { recursive: true });
+    fs.writeFileSync(configFn, JSON.stringify(config));
 }
 
 
@@ -65,12 +63,14 @@ const subdirs = (rootdir) => new Promise((resolve, reject) => {
 
 const main = () => {
     fs.mkdirSync(OUTPUT_DIRECTORY, { recursive: true });
-    subdirs(INPUT_DIRECTORY).then((subdirs) => {
-        subdirs.forEach(generateSetReplayConfigs);
-    });
-    subdirs(OUTPUT_DIRECTORY).then((subdirs) => {
-        subdirs.forEach(processSetReplayConfigs);
-    });
+    subdirs(INPUT_DIRECTORY)
+        .then((subdirs) => {
+            subdirs.forEach(generateSetReplayConfigs);
+        })
+        .then(() => subdirs(OUTPUT_DIRECTORY))
+        .then((subdirs) => {
+            subdirs.forEach(processSetReplayConfigs);
+        });
 }
 
 
