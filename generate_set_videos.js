@@ -55,14 +55,20 @@ const processSetReplayConfigs = (setDir) => {
 }
 
 
+const subdirs = (rootdir) => new Promise((resolve, reject) => {
+    dir.subdirs(rootdir, (err, subdirs) => {
+        if (err) reject(err);
+        resolve(subdirs);
+    });
+});
+
+
 const main = () => {
-    fs.mkdirSync(OUTPUT_DIRECTORY, { recursive: true })
-    dir.subdirs(INPUT_DIRECTORY, (err, subdirs) => {
-        if (err) throw err;
+    fs.mkdirSync(OUTPUT_DIRECTORY, { recursive: true });
+    subdirs(INPUT_DIRECTORY).then((subdirs) => {
         subdirs.forEach(generateSetReplayConfigs);
     });
-    dir.subdirs(OUTPUT_DIRECTORY, (err, subdirs) => {
-        if (err) throw err;
+    subdirs(OUTPUT_DIRECTORY).then((subdirs) => {
         subdirs.forEach(processSetReplayConfigs);
     });
 }
