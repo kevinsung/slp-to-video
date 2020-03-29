@@ -62,7 +62,7 @@ const executeCommandsInQueue = async (command, argsArray, numWorkers, onSpawn) =
         }
     }
     const workers = [];
-    for (let i = 0; i < NUM_PROCESSES; i++) {
+    while (workers.length < NUM_PROCESSES) {
         workers.push(worker());
     }
     while (workers.length > 0) {
