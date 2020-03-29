@@ -50,20 +50,14 @@ const exit = (process) => new Promise((resolve, reject) => {
 });
 
 
-const executeDolphinCommands = async (argsArray) => {
+const executeCommandsInQueue = async (command, argsArray, numWorkers, onSpawn) => {
     const worker = async () => {
         while (argsArray.length > 0) {
             const args = argsArray.pop();
-            const process = child_process.spawn(DOLPHIN_PATH, args);
-            process.stdout.setEncoding('utf8');
-            process.stdout.on('data', (data) => {
-                const lines = data.split('\r\n');
-                lines.forEach((line) => {
-                    if (line.includes('[END_FRAME]')) {
-                        setTimeout(() => process.kill(), 1000);
-                    }
-                });
-            });
+            const process = child_process.spawn(command, args);
+            if (onSpawn !== undefined) {
+                onSpawn(process);
+            }
             await exit(process);
         }
     }
@@ -77,21 +71,16 @@ const executeDolphinCommands = async (argsArray) => {
 }
 
 
-const executeFFmpegCommands = async (argsArray) => {
-    const worker = async () => {
-        while (argsArray.length > 0) {
-            const args = argsArray.pop();
-            const process = child_process.spawn('ffmpeg', args);
-            await exit(process);
-        }
-    }
-    const workers = [];
-    for (let i = 0; i < NUM_PROCESSES; i++) {
-        workers.push(worker());
-    }
-    while (workers.length > 0) {
-        await workers.pop();
-    }
+const killDolphinOnEndFrame = (process) => {
+    process.stdout.setEncoding('utf8');
+    process.stdout.on('data', (data) => {
+        const lines = data.split('\r\n');
+        lines.forEach((line) => {
+            if (line.includes('[END_FRAME]')) {
+                setTimeout(() => process.kill(), 1000);
+            }
+        });
+    });
 }
 
 
@@ -111,8 +100,10 @@ const processReplayConfigs = async (files) => {
             '-b:v', '15M', `${basename}-merged.avi`
         ]);
     });
-    await executeDolphinCommands(dolphinCommandArgsArray);
-    await executeFFmpegCommands(ffmpegCommandArgsArray);
+    await executeCommandsInQueue(DOLPHIN_PATH, dolphinCommandArgsArray,
+                                 NUM_PROCESSES, killDolphinOnEndFrame);
+    await executeCommandsInQueue('ffmpeg', ffmpegCommandArgsArray,
+                                 NUM_PROCESSES);
 }
 
 
