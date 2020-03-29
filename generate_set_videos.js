@@ -50,7 +50,7 @@ const exit = (process) => new Promise((resolve, reject) => {
 });
 
 
-const executeDolphinCommands = (argsArray) => {
+const executeDolphinCommands = async (argsArray) => {
     const worker = async () => {
         while (argsArray.length > 0) {
             const args = argsArray.pop();
@@ -67,21 +67,52 @@ const executeDolphinCommands = (argsArray) => {
             await exit(process);
         }
     }
+    const workers = [];
     for (let i = 0; i < NUM_PROCESSES; i++) {
-        worker();
+        workers.push(worker());
+    }
+    while (workers.length > 0) {
+        await workers.pop();
     }
 }
 
 
-const processReplayConfigs = (files) => {
-    dolphinCommandArgsArray = [];
+const executeFFmpegCommands = async (argsArray) => {
+    const worker = async () => {
+        while (argsArray.length > 0) {
+            const args = argsArray.pop();
+            const process = child_process.spawn('ffmpeg', args);
+            await exit(process);
+        }
+    }
+    const workers = [];
+    for (let i = 0; i < NUM_PROCESSES; i++) {
+        workers.push(worker());
+    }
+    while (workers.length > 0) {
+        await workers.pop();
+    }
+}
+
+
+const processReplayConfigs = async (files) => {
+    const dolphinCommandArgsArray = [];
+    const ffmpegCommandArgsArray = [];
     files.forEach((file) => {
+        const basename = path.join(path.dirname(file), path.basename(file, '.json'));
         dolphinCommandArgsArray.push([
             '-i', file,
-            '-o', path.join(path.dirname(file), path.basename(file, '.json')),
-            '-b', '-e', SSBM_ISO_PATH]);
+            '-o', basename,
+            '-b', '-e', SSBM_ISO_PATH
+        ]);
+        ffmpegCommandArgsArray.push([
+            '-i', `${basename}.avi`,
+            '-i', `${basename}.wav`,
+            '-b:v', '15M', `${basename}-merged.avi`
+        ]);
     });
-    executeDolphinCommands(dolphinCommandArgsArray);
+    await executeDolphinCommands(dolphinCommandArgsArray);
+    await executeFFmpegCommands(ffmpegCommandArgsArray);
 }
 
 
