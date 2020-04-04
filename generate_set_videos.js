@@ -112,17 +112,17 @@ const concatenateVideos = (dir) => {
   })
 }
 
-const subdirs = (rootdir) => new Promise((resolve, reject) => {
-  dir.subdirs(rootdir, (err, subdirs) => {
-    if (err) reject(err)
-    resolve(subdirs)
-  })
-})
-
 const files = (rootdir) => new Promise((resolve, reject) => {
   dir.files(rootdir, (err, files) => {
     if (err) reject(err)
     resolve(files)
+  })
+})
+
+const subdirs = (rootdir) => new Promise((resolve, reject) => {
+  dir.subdirs(rootdir, (err, subdirs) => {
+    if (err) reject(err)
+    resolve(subdirs)
   })
 })
 
