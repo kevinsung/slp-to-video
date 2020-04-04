@@ -32,18 +32,6 @@ const generateReplayConfig = (file) => {
 };
 
 
-const generateSetReplayConfigs = (setDir) => {
-  fs.readdir(setDir, (err, files) => {
-    if (err) throw err;
-    files.forEach((file) => {
-      if (path.extname(file) == '.slp') {
-        generateReplayConfig(path.join(setDir, file));
-      }
-    });
-  });
-};
-
-
 const exit = (process) => new Promise((resolve, reject) => {
   process.on('exit', (code, signal) => {
     resolve(code, signal);
@@ -110,6 +98,27 @@ const processReplayConfigs = async (files) => {
 };
 
 
+const concatenateVideos = (dir) => {
+  fs.readdir(dir, async (err, files) => {
+    if (err) throw err;
+    files = files.filter((file) => file.endsWith('merged.avi'));
+    if (!files.length) return;
+    files.sort();
+    concatFn = path.join(dir, 'concat.txt');
+    const stream = fs.createWriteStream(concatFn);
+    files.forEach((file) => {
+      fn = path.join(dir, file)
+      stream.write(`file '${fn}'\n`);
+    });
+    stream.end();
+    args = ['-f', 'concat', '-safe', '0', '-i', concatFn, '-c', 'copy', `${dir}.avi`]
+    const process = spawn('ffmpeg', args);
+    await exit(process);
+    fs.rmdir(dir, {recursive: true}, (err) => {if (err) throw err});
+  });
+};
+
+
 const subdirs = (rootdir) => new Promise((resolve, reject) => {
   dir.subdirs(rootdir, (err, subdirs) => {
     if (err) reject(err);
@@ -128,14 +137,18 @@ const files = (rootdir) => new Promise((resolve, reject) => {
 
 const main = () => {
   fs.mkdirSync(OUTPUT_DIRECTORY);
-  subdirs(INPUT_DIRECTORY)
-      .then((subdirs) => {
-        subdirs.forEach(generateSetReplayConfigs);
-      })
-      .then(() => files(OUTPUT_DIRECTORY))
-      .then((files) => {
-        processReplayConfigs(files);
-      });
+  files(INPUT_DIRECTORY)
+    .then((files) => {
+      files.forEach(generateReplayConfig);
+    })
+    .then(() => files(OUTPUT_DIRECTORY))
+    .then(async (files) => {
+      await processReplayConfigs(files);
+    })
+    .then(() => subdirs(OUTPUT_DIRECTORY))
+    .then((subdirs) => {
+      subdirs.forEach(concatenateVideos);
+    });
 };
 
 
