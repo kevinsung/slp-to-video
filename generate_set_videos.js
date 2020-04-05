@@ -36,16 +36,24 @@ const exit = (process) => new Promise((resolve, reject) => {
   })
 })
 
+const close = (stream) => new Promise((resolve, reject) => {
+  stream.on('close', (code, signal) => {
+    resolve(code, signal)
+  })
+})
+
 const executeCommandsInQueue = async (command, argsArray, numWorkers,
   onSpawn) => {
   const worker = async () => {
-    while (argsArray.length > 0) {
-      const args = argsArray.pop()
+    let args
+    while ((args = argsArray.pop()) !== undefined) {
       const process = spawn(command, args)
-      if (onSpawn !== undefined) {
-        onSpawn(process)
+      let onSpawnPromise
+      if (onSpawn) {
+        onSpawnPromise = onSpawn(process, args)
       }
       await exit(process)
+      await onSpawnPromise
     }
   }
   const workers = []
@@ -69,33 +77,94 @@ const killDolphinOnEndFrame = (process) => {
   })
 }
 
+const saveBlackFrames = async (process, args) => {
+  const basename = path.join(path.dirname(args[1]),
+    path.basename(args[1], '.avi'))
+  const blackFrameData = []
+  process.stderr.setEncoding('utf8')
+  process.stderr.on('data', (data) => {
+    const regex = /black_start:(.+) black_end:(.+) /g
+    let match
+    while ((match = regex.exec(data)) != null) {
+      blackFrameData.push({ blackStart: match[1], blackEnd: match[2] })
+    }
+  })
+  await close(process.stderr)
+  fs.writeFileSync(`${basename}-blackdetect.json`,
+    JSON.stringify(blackFrameData))
+}
+
 const processReplayConfigs = async (files) => {
-  const dolphinCommandArgsArray = []
-  const ffmpegCommandArgsArray = []
+  const dolphinArgsArray = []
+  const ffmpegMergeArgsArray = []
+  const ffmpegBlackDetectArgsArray = []
+
   files.forEach((file) => {
-    const basename = path.join(path.dirname(file),
-      path.basename(file, '.json'))
-    dolphinCommandArgsArray.push([
+    const basename = path.join(path.dirname(file), path.basename(file, '.json'))
+    dolphinArgsArray.push([
       '-i', file,
       '-o', basename,
       '-b', '-e', SSBM_ISO_PATH
     ])
-    ffmpegCommandArgsArray.push([
+    ffmpegMergeArgsArray.push([
       '-i', `${basename}.avi`,
       '-i', `${basename}.wav`,
-      '-b:v', '15M', `${basename}-merged.avi`
+      '-b:v', '15M',
+      `${basename}-merged.avi`
+    ])
+    ffmpegBlackDetectArgsArray.push([
+      '-i', `${basename}-merged.avi`,
+      '-vf', 'blackdetect=d=0.01:pix_th=0.01',
+      '-f', 'null', '-'
     ])
   })
-  await executeCommandsInQueue(DOLPHIN_PATH, dolphinCommandArgsArray,
-    NUM_PROCESSES, killDolphinOnEndFrame)
-  await executeCommandsInQueue('ffmpeg', ffmpegCommandArgsArray,
-    NUM_PROCESSES)
+
+  // Dump frames to video and audio
+  await executeCommandsInQueue(DOLPHIN_PATH, dolphinArgsArray, NUM_PROCESSES,
+    killDolphinOnEndFrame)
+
+  // Merge video and audio files
+  await executeCommandsInQueue('ffmpeg', ffmpegMergeArgsArray, NUM_PROCESSES)
+
+  // Delete files to save space
+  files.forEach((file) => {
+    const basename = path.join(path.dirname(file), path.basename(file, '.json'))
+    fs.unlinkSync(`${basename}.avi`)
+    fs.unlinkSync(`${basename}.wav`)
+  })
+
+  // Find black frames
+  await executeCommandsInQueue('ffmpeg', ffmpegBlackDetectArgsArray,
+    NUM_PROCESSES, saveBlackFrames)
+
+  // Trim black frames
+  const ffmpegTrimArgsArray = []
+  files.forEach((file) => {
+    const basename = path.join(path.dirname(file), path.basename(file, '.json'))
+    const blackFrames = JSON.parse(
+      fs.readFileSync(`${basename}-merged-blackdetect.json`, 'utf8'))
+    let trimParameters = `start=${blackFrames[0].blackEnd}`
+    if (blackFrames.length > 1) {
+      trimParameters = trimParameters.concat(
+        `:end=${blackFrames[1].blackStart}`)
+    }
+    ffmpegTrimArgsArray.push([
+      '-i', `${basename}-merged.avi`,
+      '-b:v', '15M',
+      '-filter_complex',
+      `[0:v]trim=${trimParameters},setpts=PTS-STARTPTS[v1];` +
+      `[0:a]atrim=${trimParameters},asetpts=PTS-STARTPTS[a1]`,
+      '-map', '[v1]', '-map', '[a1]',
+      `${basename}-trimmed.avi`
+    ])
+  })
+  await executeCommandsInQueue('ffmpeg', ffmpegTrimArgsArray, NUM_PROCESSES)
 }
 
 const concatenateVideos = (dir) => {
   fs.readdir(dir, async (err, files) => {
     if (err) throw err
-    files = files.filter((file) => file.endsWith('merged.avi'))
+    files = files.filter((file) => file.endsWith('trimmed.avi'))
     if (!files.length) return
     files.sort()
     const concatFn = path.join(dir, 'concat.txt')
