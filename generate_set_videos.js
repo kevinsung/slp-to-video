@@ -5,11 +5,11 @@ const path = require('path')
 const dir = require('node-dir')
 const { default: SlippiGame } = require('slp-parser-js')
 
-const INPUT_DIRECTORY = '/home/kjs/Projects/slp-to-video/test'
+const INPUT_DIRECTORY = '/home/kjs/Projects/smash/slp_files/copies/sets'
 const OUTPUT_DIRECTORY = '/home/kjs/Projects/smash/videos/sets'
-const DOLPHIN_PATH = '/home/kjs/Projects/Ishiiruka/build/Binaries/dolphin-emu'
+const DOLPHIN_PATH = '/home/kjs/Projects/slp-to-video/Ishiiruka/build/Binaries/dolphin-emu'
 const SSBM_ISO_PATH = '/home/kjs/Projects/smash/isos/SSBM-1.02.iso'
-const NUM_PROCESSES = 2
+const NUM_PROCESSES = 60
 
 const generateReplayConfig = (file) => {
   const game = new SlippiGame(file)
@@ -196,7 +196,10 @@ const subdirs = (rootdir) => new Promise((resolve, reject) => {
 })
 
 const main = () => {
-  fs.mkdirSync(OUTPUT_DIRECTORY)
+  if (fs.existsSync(OUTPUT_DIRECTORY)) {
+    fs.rmdirSync(OUTPUT_DIRECTORY, { recursive: true })
+  }
+  fs.mkdirSync(OUTPUT_DIRECTORY, { recursive: true })
   files(INPUT_DIRECTORY)
     .then((files) => {
       files.forEach(generateReplayConfig)
