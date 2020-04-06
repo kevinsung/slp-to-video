@@ -4,12 +4,13 @@ const fs = require('fs')
 const path = require('path')
 const dir = require('node-dir')
 const { default: SlippiGame } = require('slp-parser-js')
+const argv = require('yargs').argv
 
-const INPUT_DIRECTORY = '/home/kjs/Projects/smash/slp_files/copies/sets'
-const OUTPUT_DIRECTORY = '/home/kjs/Projects/smash/videos/sets'
-const DOLPHIN_PATH = '/home/kjs/Projects/slp-to-video/Ishiiruka/build/Binaries/dolphin-emu'
-const SSBM_ISO_PATH = '/home/kjs/Projects/smash/isos/SSBM-1.02.iso'
-const NUM_PROCESSES = 60
+const INPUT_DIRECTORY = path.resolve(argv.input)
+const OUTPUT_DIRECTORY = path.resolve(argv.output)
+const DOLPHIN_PATH = path.resolve(argv.dolphin_path)
+const SSBM_ISO_PATH = path.resolve(argv.ssbm_iso_path)
+const NUM_PROCESSES = 3
 
 const generateReplayConfig = (file) => {
   const game = new SlippiGame(file)
