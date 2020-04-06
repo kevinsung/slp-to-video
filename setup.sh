@@ -10,7 +10,7 @@ else
 fi
 cd build
 cmake -DLINUX_LOCAL_DEV=true ../
-make -j63
+make -j3
 touch Binaries/portable.txt
 cp -R ../Overwrite/* Binaries/
 
