@@ -49,12 +49,10 @@ const executeCommandsInQueue = async (command, argsArray, numWorkers,
     let args
     while ((args = argsArray.pop()) !== undefined) {
       const process = spawn(command, args)
-      let onSpawnPromise
       if (onSpawn) {
-        onSpawnPromise = onSpawn(process, args)
+        await onSpawn(process, args)
       }
       await exit(process)
-      await onSpawnPromise
     }
   }
   const workers = []
