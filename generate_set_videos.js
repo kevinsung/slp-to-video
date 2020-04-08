@@ -10,7 +10,7 @@ const INPUT_DIRECTORY = path.resolve(argv.input)
 const OUTPUT_DIRECTORY = path.resolve(argv.output)
 const DOLPHIN_PATH = path.resolve(argv.dolphin_path)
 const SSBM_ISO_PATH = path.resolve(argv.ssbm_iso_path)
-const NUM_PROCESSES = 3
+const NUM_PROCESSES = argv.num_cpus
 
 const generateReplayConfig = (file) => {
   const game = new SlippiGame(file)
