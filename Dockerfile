@@ -1,50 +1,33 @@
-FROM ubuntu
+FROM fedora:31
 
 # Install dependencies
-RUN apt update
-RUN apt install -y make
-RUN apt install -y g++
-RUN apt install -y curl
-RUN apt install -y ffmpeg
-RUN apt install -y xvfb
-RUN apt install -y npm
+RUN dnf install -y curl
+RUN dnf install -y git
+RUN dnf install -y make
+RUN dnf install -y nodejs
+RUN dnf install -y npm
+RUN dnf install -y xorg-x11-server-Xvfb
 # Dolphin build dependencies
-RUN apt install -y cmake
-RUN apt install -y pkg-config
-RUN apt install -y git
-RUN apt install -y libao-dev
-RUN apt install -y libasound2-dev
-RUN apt install -y libavcodec-dev
-RUN apt install -y libavformat-dev
-RUN apt install -y libbluetooth-dev
-RUN apt install -y libenet-dev
-RUN apt install -y libgtk2.0-dev
-RUN apt install -y liblzo2-dev
-RUN apt install -y libminiupnpc-dev
-RUN apt install -y libopenal-dev
-RUN apt install -y libpulse-dev
-RUN apt install -y libreadline-dev
-RUN apt install -y libsfml-dev
-RUN apt install -y libsoil-dev
-RUN apt install -y libsoundtouch-dev
-RUN apt install -y libswscale-dev
-RUN apt install -y libusb-1.0-0-dev
-RUN apt install -y libwxbase3.0-dev
-RUN apt install -y libwxgtk3.0-dev
-RUN apt install -y libxext-dev
-RUN apt install -y libxrandr-dev
-RUN apt install -y portaudio19-dev
-RUN apt install -y zlib1g-dev
-RUN apt install -y libudev-dev
-RUN apt install -y libevdev-dev
-RUN apt install -y "libpolarssl-dev|libmbedtls-dev"
-RUN apt install -y libcurl4-openssl-dev
-RUN apt install -y libegl1-mesa-dev
-RUN apt install -y libpng-dev
-RUN apt install -y qtbase5-private-dev
-# NodeJS
-RUN curl -sL https://deb.nodesource.com/setup_13.x | bash -
-RUN apt-get install -y nodejs
+RUN dnf install -y cmake
+RUN dnf install -y gcc-c++
+RUN dnf install -y libXext-devel
+RUN dnf install -y libgudev
+RUN dnf install -y libXi-devel
+RUN dnf install -y libSM-devel
+RUN dnf install -y gtk2-devel
+RUN dnf install -y wxGTK3-devel
+RUN dnf install -y systemd-devel
+RUN dnf install -y openal-soft-devel
+RUN dnf install -y libevdev-devel
+RUN dnf install -y libao-devel
+RUN dnf install -y SOIL-devel
+RUN dnf install -y libXrandr-devel
+RUN dnf install -y pulseaudio-libs-devel
+RUN dnf install -y bluez-libs-devel
+RUN dnf install -y libusb-devel
+# From RPM Fusion
+RUN dnf install -y https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm
+RUN dnf install -y ffmpeg
 
 # Clone repository
 WORKDIR /usr/src
