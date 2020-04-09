@@ -1,4 +1,4 @@
-FROM debian:10
+FROM ubuntu
 
 # Install dependencies
 RUN apt update
@@ -7,7 +7,6 @@ RUN apt install -y g++
 RUN apt install -y curl
 RUN apt install -y ffmpeg
 RUN apt install -y xvfb
-RUN apt install -y nodejs
 RUN apt install -y npm
 # Dolphin build dependencies
 RUN apt install -y cmake
@@ -43,6 +42,9 @@ RUN apt install -y libcurl4-openssl-dev
 RUN apt install -y libegl1-mesa-dev
 RUN apt install -y libpng-dev
 RUN apt install -y qtbase5-private-dev
+# NodeJS
+RUN curl -sL https://deb.nodesource.com/setup_13.x | bash -
+RUN apt-get install -y nodejs
 
 # Clone repository
 WORKDIR /usr/src
@@ -50,7 +52,10 @@ RUN git clone https://github.com/kevinsung/slp-to-video.git
 WORKDIR /usr/src/slp-to-video
 
 # Copy SSBM iso
-COPY SSBM.iso SSBM.iso
+COPY SSBM.iso .
+# REMOVE THIS
+COPY generate_set_videos.js .
+COPY entrypoint.sh .
 
 # Compile and configure Dolphin
 RUN git clone https://github.com/kevinsung/Ishiiruka.git
@@ -75,8 +80,4 @@ RUN npm install
 
 # Entrypoint
 WORKDIR /usr/src/slp-to-video
-ENTRYPOINT ["node", "generate_set_videos.js",\
-            "--dolphin_path",\
-            "/usr/src/slp-to-video/Ishiiruka/build/Binaries/dolphin-emu",\
-            "--ssbm_iso_path",\
-            "SSBM.iso"]
+#ENTRYPOINT ["bash", "entrypoint.sh"]
