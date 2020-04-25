@@ -15,34 +15,44 @@
 const { spawn } = require('child_process')
 const crypto = require('crypto')
 const fs = require('fs')
+const fsPromises = require('fs').promises
+const os = require('os')
 const path = require('path')
 const dir = require('node-dir')
 const { default: SlippiGame } = require('slp-parser-js')
 const argv = require('yargs').argv
 
-const INPUT_DIRECTORY = path.resolve(argv.input)
-const OUTPUT_DIRECTORY = path.resolve(argv.output)
+const INPUT_FILE = path.resolve(argv.input)
 const DOLPHIN_PATH = path.resolve(argv.dolphin_path)
 const SSBM_ISO_PATH = path.resolve(argv.ssbm_iso_path)
 const NUM_PROCESSES = argv.num_cpus
 
-const generateReplayConfig = (file) => {
-  const game = new SlippiGame(file)
+const generateReplayConfigs = async (replays, basedir) => {
+  const dirname = path.join(basedir,
+                            `tmp-${crypto.randomBytes(12).toString('hex')}`)
+  await fsPromises.mkdir(dirname)
+  await fsPromises.writeFile(path.join(dirname, 'output_path.txt'),
+                             replays.output_path)
+  await fsPromises.mkdir(dirname, { recursive: true })
+    .then(() => replays.replays.forEach(
+      (replay) => generateReplayConfig(replay, dirname)
+    ))
+}
+
+const generateReplayConfig = async (replay, basedir) => {
+  const game = new SlippiGame(replay.replay)
   const metadata = game.getMetadata()
   const config = {
     mode: 'normal',
-    replay: file,
-    startFrame: -123,
-    endFrame: metadata.lastFrame,
+    replay: replay.replay,
+    startFrame: replay.startFrame != null ? replay.startFrame : -123,
+    endFrame: replay.endFrame != null ? replay.endFrame : metadata.lastFrame,
     isRealTimeMode: false,
     commandId: `${crypto.randomBytes(12).toString('hex')}`
   }
-  let configFn = file.replace(INPUT_DIRECTORY, OUTPUT_DIRECTORY)
-  const parsed = path.parse(configFn)
-  configFn = path.join(parsed.dir,
-      `${metadata.startAt.replace(/:/g, '')}.json`)
-  fs.mkdirSync(parsed.dir, { recursive: true })
-  fs.writeFileSync(configFn, JSON.stringify(config))
+  const configFn = path.join(basedir,
+                             `${metadata.startAt.replace(/:/g, '')}.json`)
+  await fsPromises.writeFile(configFn, JSON.stringify(config))
 }
 
 const exit = (process) => new Promise((resolve, reject) => {
@@ -58,7 +68,7 @@ const close = (stream) => new Promise((resolve, reject) => {
 })
 
 const executeCommandsInQueue = async (command, argsArray, numWorkers,
-  onSpawn) => {
+    onSpawn) => {
   const worker = async () => {
     let args
     while ((args = argsArray.pop()) !== undefined) {
@@ -175,23 +185,28 @@ const processReplayConfigs = async (files) => {
 }
 
 const concatenateVideos = (dir) => {
-  fs.readdir(dir, async (err, files) => {
-    if (err) throw err
-    files = files.filter((file) => file.endsWith('trimmed.avi'))
-    if (!files.length) return
-    files.sort()
-    const concatFn = path.join(dir, 'concat.txt')
-    const stream = fs.createWriteStream(concatFn)
-    files.forEach((file) => {
-      stream.write(`file '${path.join(dir, file)}'\n`)
+  fsPromises.readFile(path.join(dir, 'output_path.txt'), { encoding: 'utf8' })
+    .then((output_path) => {
+      console.log(output_path)
+      fs.readdir(dir, async (err, files) => {
+        if (err) throw err
+        files = files.filter((file) => file.endsWith('trimmed.avi'))
+        if (!files.length) return
+        files.sort()
+        const concatFn = path.join(dir, 'concat.txt')
+        const stream = fs.createWriteStream(concatFn)
+        files.forEach((file) => {
+          stream.write(`file '${path.join(dir, file)}'\n`)
+        })
+        stream.end()
+        const args = ['-f', 'concat', '-safe', '0',
+                      '-i', concatFn,
+                      '-c', 'copy',
+                      output_path]
+        const process = spawn('ffmpeg', args)
+        await exit(process)
+      })
     })
-    stream.end()
-    const args = ['-f', 'concat', '-safe', '0', '-i', concatFn, '-c', 'copy',
-                  `${dir}.avi`]
-    const process = spawn('ffmpeg', args)
-    await exit(process)
-    fs.rmdir(dir, { recursive: true }, (err) => { if (err) throw err })
-  })
 }
 
 const files = (rootdir) => new Promise((resolve, reject) => {
@@ -209,19 +224,23 @@ const subdirs = (rootdir) => new Promise((resolve, reject) => {
 })
 
 const main = () => {
-  if (fs.existsSync(OUTPUT_DIRECTORY)) {
-    fs.rmdirSync(OUTPUT_DIRECTORY, { recursive: true })
-  }
-  fs.mkdirSync(OUTPUT_DIRECTORY, { recursive: true })
-  files(INPUT_DIRECTORY)
-    .then((files) => {
-      files.forEach(generateReplayConfig)
+  const tmpdirname = path.join(os.tmpdir(),
+                               `tmp-${crypto.randomBytes(12).toString('hex')}`)
+  fsPromises.mkdir(tmpdirname)
+    .then(() => fsPromises.readFile(INPUT_FILE))
+    .then(async (contents) => {
+      promises = []
+      JSON.parse(contents).forEach(
+        (replays) => promises.push(generateReplayConfigs(replays, tmpdirname))
+      )
+      await Promise.all(promises)
     })
-    .then(() => files(OUTPUT_DIRECTORY))
+    .then(() => files(tmpdirname))
     .then(async (files) => {
+      files = files.filter((file) => path.extname(file) == '.json')
       await processReplayConfigs(files)
     })
-    .then(() => subdirs(OUTPUT_DIRECTORY))
+    .then(() => subdirs(tmpdirname))
     .then((subdirs) => {
       subdirs.forEach(concatenateVideos)
     })
