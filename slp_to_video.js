@@ -101,7 +101,7 @@ const killDolphinOnEndFrame = (process) => {
     const lines = data.split('\r\n')
     lines.forEach((line) => {
       if (line.includes('[END_FRAME]')) {
-        setTimeout(() => process.kill(), 1000)
+        setTimeout(() => process.kill(), 5000)
       }
     })
   })
