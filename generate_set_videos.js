@@ -34,9 +34,9 @@ const generateReplayConfigs = async (replays, basedir) => {
   await fsPromises.writeFile(path.join(dirname, 'outputPath.txt'),
     replays.outputPath)
   await fsPromises.mkdir(dirname, { recursive: true })
-    .then(() => replays.replays.forEach(
-      (replay) => generateReplayConfig(replay, dirname)
-    ))
+  replays.replays.forEach(
+    (replay) => generateReplayConfig(replay, dirname)
+  )
 }
 
 const generateReplayConfig = async (replay, basedir) => {
@@ -151,11 +151,13 @@ const processReplayConfigs = async (files) => {
   await executeCommandsInQueue('ffmpeg', ffmpegMergeArgsArray, NUM_PROCESSES)
 
   // Delete files to save space
+  let promises = []
   files.forEach((file) => {
     const basename = path.join(path.dirname(file), path.basename(file, '.json'))
-    fs.unlinkSync(`${basename}.avi`)
-    fs.unlinkSync(`${basename}.wav`)
+    promises.push(fsPromises.unlink(`${basename}.avi`))
+    promises.push(fsPromises.unlink(`${basename}.wav`))
   })
+  await Promise.all(promises)
 
   // Find black frames
   await executeCommandsInQueue('ffmpeg', ffmpegBlackDetectArgsArray,
@@ -163,32 +165,37 @@ const processReplayConfigs = async (files) => {
 
   // Trim black frames
   const ffmpegTrimArgsArray = []
+  promises = []
   files.forEach((file) => {
     const basename = path.join(path.dirname(file), path.basename(file, '.json'))
-    const blackFrames = JSON.parse(
-      fs.readFileSync(`${basename}-merged-blackdetect.json`, 'utf8'))
-    let trimParameters = `start=${blackFrames[0].blackEnd}`
-    if (blackFrames.length > 1) {
-      trimParameters = trimParameters.concat(
-        `:end=${blackFrames[1].blackStart}`)
-    }
-    ffmpegTrimArgsArray.push([
-      '-i', `${basename}-merged.avi`,
-      '-b:v', '15M',
-      '-filter_complex',
-      `[0:v]trim=${trimParameters},setpts=PTS-STARTPTS[v1];` +
-      `[0:a]atrim=${trimParameters},asetpts=PTS-STARTPTS[a1]`,
-      '-map', '[v1]', '-map', '[a1]',
-      `${basename}-trimmed.avi`
-    ])
+    const promise = fsPromises.readFile(`${basename}-merged-blackdetect.json`,
+                                        { encoding: 'utf8'})
+      .then((contents) => {
+        const blackFrames = JSON.parse(contents)
+        let trimParameters = `start=${blackFrames[0].blackEnd}`
+        if (blackFrames.length > 1) {
+          trimParameters = trimParameters.concat(
+            `:end=${blackFrames[1].blackStart}`)
+        }
+        ffmpegTrimArgsArray.push([
+          '-i', `${basename}-merged.avi`,
+          '-b:v', '15M',
+          '-filter_complex',
+          `[0:v]trim=${trimParameters},setpts=PTS-STARTPTS[v1];` +
+          `[0:a]atrim=${trimParameters},asetpts=PTS-STARTPTS[a1]`,
+          '-map', '[v1]', '-map', '[a1]',
+          `${basename}-trimmed.avi`
+        ])
+      })
+    promises.push(promise)
   })
+  await Promise.all(promises)
   await executeCommandsInQueue('ffmpeg', ffmpegTrimArgsArray, NUM_PROCESSES)
 }
 
 const concatenateVideos = (dir) => {
   fsPromises.readFile(path.join(dir, 'outputPath.txt'), { encoding: 'utf8' })
     .then((outputPath) => {
-      console.log(outputPath)
       fs.readdir(dir, async (err, files) => {
         if (err) throw err
         files = files.filter((file) => file.endsWith('trimmed.avi'))
