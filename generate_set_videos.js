@@ -31,8 +31,8 @@ const generateReplayConfigs = async (replays, basedir) => {
   const dirname = path.join(basedir,
                             `tmp-${crypto.randomBytes(12).toString('hex')}`)
   await fsPromises.mkdir(dirname)
-  await fsPromises.writeFile(path.join(dirname, 'output_path.txt'),
-                             replays.output_path)
+  await fsPromises.writeFile(path.join(dirname, 'outputPath.txt'),
+    replays.outputPath)
   await fsPromises.mkdir(dirname, { recursive: true })
     .then(() => replays.replays.forEach(
       (replay) => generateReplayConfig(replay, dirname)
@@ -68,15 +68,16 @@ const close = (stream) => new Promise((resolve, reject) => {
 })
 
 const executeCommandsInQueue = async (command, argsArray, numWorkers,
-    onSpawn) => {
+  onSpawn) => {
   const worker = async () => {
     let args
     while ((args = argsArray.pop()) !== undefined) {
       const process = spawn(command, args)
+      const exitPromise = exit(process)
       if (onSpawn) {
         await onSpawn(process, args)
       }
-      await exit(process)
+      await exitPromise
     }
   }
   const workers = []
@@ -113,7 +114,7 @@ const saveBlackFrames = async (process, args) => {
     }
   })
   await close(process.stderr)
-  fs.writeFileSync(`${basename}-blackdetect.json`,
+  await fsPromises.writeFile(`${basename}-blackdetect.json`,
     JSON.stringify(blackFrameData))
 }
 
@@ -185,9 +186,9 @@ const processReplayConfigs = async (files) => {
 }
 
 const concatenateVideos = (dir) => {
-  fsPromises.readFile(path.join(dir, 'output_path.txt'), { encoding: 'utf8' })
-    .then((output_path) => {
-      console.log(output_path)
+  fsPromises.readFile(path.join(dir, 'outputPath.txt'), { encoding: 'utf8' })
+    .then((outputPath) => {
+      console.log(outputPath)
       fs.readdir(dir, async (err, files) => {
         if (err) throw err
         files = files.filter((file) => file.endsWith('trimmed.avi'))
@@ -200,9 +201,9 @@ const concatenateVideos = (dir) => {
         })
         stream.end()
         const args = ['-f', 'concat', '-safe', '0',
-                      '-i', concatFn,
-                      '-c', 'copy',
-                      output_path]
+          '-i', concatFn,
+          '-c', 'copy',
+          outputPath]
         const process = spawn('ffmpeg', args)
         await exit(process)
       })
@@ -229,7 +230,7 @@ const main = () => {
   fsPromises.mkdir(tmpdirname)
     .then(() => fsPromises.readFile(INPUT_FILE))
     .then(async (contents) => {
-      promises = []
+      const promises = []
       JSON.parse(contents).forEach(
         (replays) => promises.push(generateReplayConfigs(replays, tmpdirname))
       )
@@ -237,7 +238,7 @@ const main = () => {
     })
     .then(() => files(tmpdirname))
     .then(async (files) => {
-      files = files.filter((file) => path.extname(file) == '.json')
+      files = files.filter((file) => path.extname(file) === '.json')
       await processReplayConfigs(files)
     })
     .then(() => subdirs(tmpdirname))
