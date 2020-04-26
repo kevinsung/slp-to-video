@@ -25,7 +25,7 @@
     "Slippi"
   ],
   "author": "Kevin J. Sung",
-  "license": "GPL-3.0-or-later",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/kevinsung/slp-to-video/issues"
   },
