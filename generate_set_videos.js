@@ -169,7 +169,7 @@ const processReplayConfigs = async (files) => {
   files.forEach((file) => {
     const basename = path.join(path.dirname(file), path.basename(file, '.json'))
     const promise = fsPromises.readFile(`${basename}-merged-blackdetect.json`,
-                                        { encoding: 'utf8'})
+      { encoding: 'utf8' })
       .then((contents) => {
         const blackFrames = JSON.parse(contents)
         let trimParameters = `start=${blackFrames[0].blackEnd}`
@@ -193,27 +193,29 @@ const processReplayConfigs = async (files) => {
   await executeCommandsInQueue('ffmpeg', ffmpegTrimArgsArray, NUM_PROCESSES)
 }
 
-const concatenateVideos = (dir) => {
-  fsPromises.readFile(path.join(dir, 'outputPath.txt'), { encoding: 'utf8' })
-    .then((outputPath) => {
-      fs.readdir(dir, async (err, files) => {
-        if (err) throw err
-        files = files.filter((file) => file.endsWith('trimmed.avi'))
-        if (!files.length) return
-        files.sort()
-        const concatFn = path.join(dir, 'concat.txt')
-        const stream = fs.createWriteStream(concatFn)
-        files.forEach((file) => {
-          stream.write(`file '${path.join(dir, file)}'\n`)
-        })
-        stream.end()
-        const args = ['-f', 'concat', '-safe', '0',
-          '-i', concatFn,
-          '-c', 'copy',
-          outputPath]
-        const process = spawn('ffmpeg', args)
-        await exit(process)
+const concatenateVideos = async (dir) => {
+  await fsPromises.readdir(dir)
+    .then(async (files) => {
+      files = files.filter((file) => file.endsWith('trimmed.avi'))
+      if (!files.length) return
+      files.sort()
+      const concatFn = path.join(dir, 'concat.txt')
+      const stream = fs.createWriteStream(concatFn)
+      files.forEach((file) => {
+        stream.write(`file '${path.join(dir, file)}'\n`)
       })
+      stream.end()
+      await fsPromises.readFile(path.join(dir, 'outputPath.txt'),
+        { encoding: 'utf8' })
+        .then(async (outputPath) => {
+          const args = ['-y',
+            '-f', 'concat', '-safe', '0',
+            '-i', concatFn,
+            '-c', 'copy',
+            outputPath]
+          const process = spawn('ffmpeg', args)
+          await exit(process)
+        })
     })
 }
 
@@ -249,8 +251,10 @@ const main = () => {
       await processReplayConfigs(files)
     })
     .then(() => subdirs(tmpdirname))
-    .then((subdirs) => {
-      subdirs.forEach(concatenateVideos)
+    .then(async (subdirs) => {
+      const promises = []
+      subdirs.forEach((dir) => promises.push(concatenateVideos(dir)))
+      await Promise.all(promises)
     })
 }
 
