@@ -1,0 +1,26 @@
+[
+    {"output_path": "/home/kjs/set1.avi",
+     "replays": [
+        {"replay": "/home/kjs/set1/game1.slp",
+         "startFrame": null,
+         "endFrame": null
+        },
+        {"replay": "/home/kjs/set1/game2.slp",
+         "startFrame": null,
+         "endFrame": null
+        }
+     ]
+    },
+    {"output_path": "/home/kjs/set2.avi",
+     "replays": [
+        {"replay": "/home/kjs/set2/game1.slp",
+         "startFrame": 0,
+         "endFrame": 60 
+        },
+        {"replay": "/home/kjs/set2/game2.slp",
+         "startFrame": 100,
+         "endFrame": 200
+        }
+     ]
+    }
+]
