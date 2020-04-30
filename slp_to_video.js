@@ -28,10 +28,10 @@ const dir = require('node-dir')
 const { default: SlippiGame } = require('slp-parser-js')
 const argv = require('yargs').argv
 
-const INPUT_FILE = path.resolve(argv.input)
-const DOLPHIN_PATH = path.resolve(argv.dolphin_path)
-const SSBM_ISO_PATH = path.resolve(argv.ssbm_iso_path)
-const NUM_PROCESSES = argv.num_cpus
+let INPUT_FILE = path.resolve(argv.input)
+let DOLPHIN_PATH = path.resolve(argv.dolphin_path)
+let SSBM_ISO_PATH = path.resolve(argv.ssbm_iso_path)
+let NUM_PROCESSES = argv.num_cpus
 
 const generateReplayConfigs = async (replays, basedir) => {
   const dirname = path.join(basedir,
@@ -239,7 +239,14 @@ const subdirs = (rootdir) => new Promise((resolve, reject) => {
   })
 })
 
-const main = () => {
+const main = (config) => {
+  if(config){
+    INPUT_FILE = config.inputFile
+    DOLPHIN_PATH = config.dolphinPath
+    SSBM_ISO_PATH = config.SSBM_ISO_PATH
+    NUM_PROCESSES = config.numCPUs
+  }
+
   const tmpdir = path.join(os.tmpdir(),
                            `tmp-${crypto.randomBytes(12).toString('hex')}`)
   fsPromises.mkdir(tmpdir)
@@ -268,3 +275,5 @@ const main = () => {
 if (module === require.main) {
   main()
 }
+
+export default main
