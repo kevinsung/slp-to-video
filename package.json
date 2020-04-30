@@ -2,7 +2,7 @@
   "name": "slp-to-video",
   "version": "0.0.0",
   "description": "Convert slp files to video",
-  "main": "generate_set_videos.js",
+  "main": "slp_to_video.js",
   "directories": {},
   "dependencies": {
     "node-dir": "^0.1.17",
