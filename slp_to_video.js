@@ -28,10 +28,10 @@ const dir = require('node-dir')
 const { default: SlippiGame } = require('slp-parser-js')
 const argv = require('yargs').argv
 
-let INPUT_FILE = path.resolve(argv.input)
-let DOLPHIN_PATH = path.resolve(argv.dolphin_path)
-let SSBM_ISO_PATH = path.resolve(argv.ssbm_iso_path)
-let NUM_PROCESSES = argv.num_cpus
+let INPUT_FILE = argv.input ? path.resolve(argv.input) : null
+let DOLPHIN_PATH = argv.dolphin_path ? path.resolve(argv.dolphin_path) : null
+let SSBM_ISO_PATH = argv.ssbm_iso_path ? path.resolve(argv.ssbm_iso_path) : null
+let NUM_PROCESSES = argv.num_cpus ? argv.num_cpus : null
 
 const generateReplayConfigs = async (replays, basedir) => {
   const dirname = path.join(basedir,
