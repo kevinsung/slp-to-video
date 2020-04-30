@@ -286,4 +286,4 @@ if (module === require.main) {
   main()
 }
 
-export default main
+module.exports = main
