@@ -245,7 +245,7 @@ const main = (config) => {
       if(config){
         INPUT_FILE = config.inputFile
         DOLPHIN_PATH = config.dolphinPath
-        SSBM_ISO_PATH = config.SSBM_ISO_PATH
+        SSBM_ISO_PATH = config.ssbmIsoPath
         NUM_PROCESSES = config.numCPUs
       }
   
