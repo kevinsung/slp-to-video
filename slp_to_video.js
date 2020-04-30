@@ -240,36 +240,46 @@ const subdirs = (rootdir) => new Promise((resolve, reject) => {
 })
 
 const main = (config) => {
-  if(config){
-    INPUT_FILE = config.inputFile
-    DOLPHIN_PATH = config.dolphinPath
-    SSBM_ISO_PATH = config.SSBM_ISO_PATH
-    NUM_PROCESSES = config.numCPUs
-  }
-
-  const tmpdir = path.join(os.tmpdir(),
-                           `tmp-${crypto.randomBytes(12).toString('hex')}`)
-  fsPromises.mkdir(tmpdir)
-    .then(() => fsPromises.readFile(INPUT_FILE))
-    .then(async (contents) => {
-      const promises = []
-      JSON.parse(contents).forEach(
-        (replays) => promises.push(generateReplayConfigs(replays, tmpdir))
-      )
-      await Promise.all(promises)
-    })
-    .then(() => files(tmpdir))
-    .then(async (files) => {
-      files = files.filter((file) => path.extname(file) === '.json')
-      await processReplayConfigs(files)
-    })
-    .then(() => subdirs(tmpdir))
-    .then(async (subdirs) => {
-      const promises = []
-      subdirs.forEach((dir) => promises.push(concatenateVideos(dir)))
-      await Promise.all(promises)
-    })
-    .then(() => fsPromises.rmdir(tmpdir, { recursive: true }))
+  return new Promise((resolve,reject) => {
+    try {
+      if(config){
+        INPUT_FILE = config.inputFile
+        DOLPHIN_PATH = config.dolphinPath
+        SSBM_ISO_PATH = config.SSBM_ISO_PATH
+        NUM_PROCESSES = config.numCPUs
+      }
+  
+      const tmpdir = path.join(os.tmpdir(),
+                              `tmp-${crypto.randomBytes(12).toString('hex')}`)
+      fsPromises.mkdir(tmpdir)
+        .then(() => fsPromises.readFile(INPUT_FILE))
+        .then(async (contents) => {
+          const promises = []
+          JSON.parse(contents).forEach(
+            (replays) => promises.push(generateReplayConfigs(replays, tmpdir))
+          )
+          await Promise.all(promises)
+        })
+        .then(() => files(tmpdir))
+        .then(async (files) => {
+          files = files.filter((file) => path.extname(file) === '.json')
+          await processReplayConfigs(files)
+        })
+        .then(() => subdirs(tmpdir))
+        .then(async (subdirs) => {
+          const promises = []
+          subdirs.forEach((dir) => promises.push(concatenateVideos(dir)))
+          await Promise.all(promises)
+        })
+        .then(() => {
+          fsPromises.rmdir(tmpdir, { recursive: true })
+          resolve();
+        })
+    } catch(err){
+      reject(err);
+    }
+    
+  })
 }
 
 if (module === require.main) {
