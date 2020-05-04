@@ -145,7 +145,7 @@ const processReplayConfigs = async (files) => {
     ffmpegBlackDetectArgsArray.push([
       '-i', `${basename}-merged.avi`,
       '-vf', 'blackdetect=d=0.01:pix_th=0.01',
-      '-max_muxing_queue_size', '1024',
+      '-max_muxing_queue_size', '9999',
       '-f', 'null', '-'
     ])
   })
