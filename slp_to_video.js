@@ -32,6 +32,8 @@ let INPUT_FILE = argv.input ? path.resolve(argv.input) : null
 let DOLPHIN_PATH = argv.dolphin_path ? path.resolve(argv.dolphin_path) : null
 let SSBM_ISO_PATH = argv.ssbm_iso_path ? path.resolve(argv.ssbm_iso_path) : null
 let NUM_PROCESSES = argv.num_cpus ? argv.num_cpus : null
+let EVENT_TRACKER = {emit:()=>{}}
+let COUNT = 0
 
 const generateReplayConfigs = async (replays, basedir) => {
   const dirname = path.join(basedir,
@@ -84,6 +86,7 @@ const executeCommandsInQueue = async (command, argsArray, numWorkers,
         await onSpawn(process, args)
       }
       await exitPromise
+      EVENT_TRACKER.emit('count',COUNT++)
     }
   }
   const workers = []
@@ -145,32 +148,39 @@ const processReplayConfigs = async (files) => {
     ffmpegBlackDetectArgsArray.push([
       '-i', `${basename}-merged.avi`,
       '-vf', 'blackdetect=d=0.01:pix_th=0.01',
-      '-max_muxing_queue_size', '1024',
       '-f', 'null', '-'
     ])
   })
 
   // Dump frames to video and audio
+  EVENT_TRACKER.emit('primaryEventMsg','Generating videos...')
+  COUNT = 0;
   await executeCommandsInQueue(DOLPHIN_PATH, dolphinArgsArray, NUM_PROCESSES,
     killDolphinOnEndFrame)
 
   // Merge video and audio files
+  EVENT_TRACKER.emit('primaryEventMsg','Merging video and audio...')
+  COUNT = 0;
   await executeCommandsInQueue('ffmpeg', ffmpegMergeArgsArray, NUM_PROCESSES)
 
   // Delete files to save space
-  let promises = []
-  files.forEach((file) => {
-    const basename = path.join(path.dirname(file), path.basename(file, '.json'))
-    promises.push(fsPromises.unlink(`${basename}.avi`))
-    promises.push(fsPromises.unlink(`${basename}.wav`))
-  })
-  await Promise.all(promises)
+  // let promises = []
+  // files.forEach((file) => {
+  //   const basename = path.join(path.dirname(file), path.basename(file, '.json'))
+  //   promises.push(fsPromises.unlink(`${basename}.avi`))
+  //   promises.push(fsPromises.unlink(`${basename}.wav`))
+  // })
+  // await Promise.all(promises)
 
   // Find black frames
+  EVENT_TRACKER.emit('primaryEventMsg','Detecting black frames...')
+  COUNT = 0;
   await executeCommandsInQueue('ffmpeg', ffmpegBlackDetectArgsArray,
     NUM_PROCESSES, saveBlackFrames)
 
   // Trim black frames
+  EVENT_TRACKER.emit('primaryEventMsg','Generating black frame trim arguments...')
+  COUNT = 0;
   const ffmpegTrimArgsArray = []
   promises = []
   files.forEach((file) => {
@@ -179,6 +189,10 @@ const processReplayConfigs = async (files) => {
       { encoding: 'utf8' })
       .then((contents) => {
         const blackFrames = JSON.parse(contents)
+        if(!blackFrames[0]){
+          EVENT_TRACKER.emit('errorEventMsg',{msg:`No black frames found in ${file}`,file});
+          return;
+        }
         let trimParameters = `start=${blackFrames[0].blackEnd}`
         if (blackFrames.length > 1) {
           trimParameters = trimParameters.concat(
@@ -197,6 +211,8 @@ const processReplayConfigs = async (files) => {
     promises.push(promise)
   })
   await Promise.all(promises)
+  EVENT_TRACKER.emit('primaryEventMsg','Trimming black frames...')
+  COUNT = 0;
   await executeCommandsInQueue('ffmpeg', ffmpegTrimArgsArray, NUM_PROCESSES)
 }
 
@@ -222,6 +238,7 @@ const concatenateVideos = async (dir) => {
             outputPath]
           const process = spawn('ffmpeg', args)
           await exit(process)
+          EVENT_TRACKER.emit('count',COUNT++)
         })
     })
 }
@@ -244,18 +261,25 @@ const main = (config) => {
   return new Promise((resolve,reject) => {
     try {
       if(config){
-        INPUT_FILE = config.inputFile
-        DOLPHIN_PATH = config.dolphinPath
-        SSBM_ISO_PATH = config.ssbmIsoPath
-        NUM_PROCESSES = config.numCPUs
+        INPUT_FILE = config.INPUT_FILE
+        DOLPHIN_PATH = config.DOLPHIN_PATH
+        SSBM_ISO_PATH = config.SSBM_ISO_PATH
+        NUM_PROCESSES = config.NUM_PROCESSES
+        EVENT_TRACKER = config.EVENT_TRACKER;
       }
-  
+      
+      EVENT_TRACKER.emit('primaryEventMsg','Creating tmp directory...')
       const tmpdir = path.join(os.tmpdir(),
                               `tmp-${crypto.randomBytes(12).toString('hex')}`)
+      
       fsPromises.mkdir(tmpdir)
-        .then(() => fsPromises.readFile(INPUT_FILE))
+        .then(() => {
+          EVENT_TRACKER.emit('primaryEventMsg','Reading input file...')
+          return fsPromises.readFile(INPUT_FILE)
+        })
         .then(async (contents) => {
           const promises = []
+          EVENT_TRACKER.emit('primaryEventMsg','Generating replay configs...')
           JSON.parse(contents).forEach(
             (replays) => promises.push(generateReplayConfigs(replays, tmpdir))
           )
@@ -264,12 +288,15 @@ const main = (config) => {
         .then(() => files(tmpdir))
         .then(async (files) => {
           files = files.filter((file) => path.extname(file) === '.json')
+          EVENT_TRACKER.emit('primaryEventMsg','Processing replay configs...')
           await processReplayConfigs(files)
         })
         .then(() => subdirs(tmpdir))
         .then(async (subdirs) => {
           const promises = []
           subdirs.forEach((dir) => promises.push(concatenateVideos(dir)))
+          EVENT_TRACKER.emit('primaryEventMsg','Concatenating videos...')
+          COUNT = 0;
           await Promise.all(promises)
         })
         .then(() => {
