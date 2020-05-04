@@ -1,5 +1,5 @@
 [
-    {"output_path": "/home/kjs/set1.avi",
+    {"outputPath": "/home/kjs/set1.avi",
      "replays": [
         {"replay": "/home/kjs/set1/game1.slp",
          "startFrame": null,
@@ -11,7 +11,7 @@
         }
      ]
     },
-    {"output_path": "/home/kjs/set2.avi",
+    {"outputPath": "/home/kjs/set2.avi",
      "replays": [
         {"replay": "/home/kjs/set2/game1.slp",
          "startFrame": 0,
