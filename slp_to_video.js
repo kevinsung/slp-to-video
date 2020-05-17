@@ -41,12 +41,12 @@ const generateReplayConfigs = async (replays, basedir) => {
   await fsPromises.writeFile(path.join(dirname, 'outputPath.txt'),
     replays.outputPath)
   await fsPromises.mkdir(dirname, { recursive: true })
-  replays.replays.forEach(
-    (replay) => generateReplayConfig(replay, dirname)
-  )
+  for (const [index, replay] of replays.replays.entries()) {
+    generateReplayConfig(replay, index, dirname)
+  }
 }
 
-const generateReplayConfig = async (replay, basedir) => {
+const generateReplayConfig = async (replay, index, basedir) => {
   const game = new SlippiGame(replay.replay)
   const metadata = game.getMetadata()
   const config = {
@@ -57,8 +57,7 @@ const generateReplayConfig = async (replay, basedir) => {
     isRealTimeMode: false,
     commandId: `${crypto.randomBytes(12).toString('hex')}`
   }
-  const configFn = path.join(basedir,
-                             `${metadata.startAt.replace(/:/g, '')}.json`)
+  const configFn = path.join(basedir, `${index}.json`)
   await fsPromises.writeFile(configFn, JSON.stringify(config))
 }
 
