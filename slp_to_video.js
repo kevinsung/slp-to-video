@@ -32,6 +32,7 @@ const INPUT_FILE = path.resolve(argv.input)
 const DOLPHIN_PATH = path.resolve(argv.dolphin_path)
 const SSBM_ISO_PATH = path.resolve(argv.ssbm_iso_path)
 const NUM_PROCESSES = argv.num_cpus
+const TMPDIR = argv.tmpdir
 
 const generateReplayConfigs = async (replays, basedir) => {
   const dirname = path.join(basedir,
@@ -241,8 +242,8 @@ const subdirs = (rootdir) => new Promise((resolve, reject) => {
 })
 
 const main = () => {
-  const tmpdir = path.join(os.tmpdir(),
-                           `tmp-${crypto.randomBytes(12).toString('hex')}`)
+  const tmpdir = TMPDIR ? path.resolve(TMPDIR) : path.join(
+    os.tmpdir(), `tmp-${crypto.randomBytes(12).toString('hex')}`)
   fsPromises.mkdir(tmpdir)
     .then(() => fsPromises.readFile(INPUT_FILE))
     .then(async (contents) => {
