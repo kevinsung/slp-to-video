@@ -243,6 +243,7 @@ const subdirs = (rootdir) => new Promise((resolve, reject) => {
 const main = () => {
   const tmpdir = TMPDIR ? path.resolve(TMPDIR) : path.join(
     os.tmpdir(), `tmp-${crypto.randomBytes(12).toString('hex')}`)
+  process.on('exit', (code) => fs.rmdirSync(tmpdir, { recursive: true }))
   fsPromises.mkdir(tmpdir)
     .then(() => fsPromises.readFile(INPUT_FILE))
     .then(async (contents) => {
@@ -263,7 +264,6 @@ const main = () => {
       subdirs.forEach((dir) => promises.push(concatenateVideos(dir)))
       await Promise.all(promises)
     })
-    .then(() => fsPromises.rmdir(tmpdir, { recursive: true }))
 }
 
 if (module === require.main) {
