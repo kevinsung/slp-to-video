@@ -150,11 +150,11 @@ const processReplayConfigs = async (files) => {
 
   // Construct arguments to commands
   files.forEach((file) => {
-    promise = fsPromises.readFile(file)
+    const promise = fsPromises.readFile(file)
       .then((contents) => {
         const overlayPath = JSON.parse(contents).overlayPath
         const basename = path.join(path.dirname(file),
-                                   path.basename(file, '.json'))
+          path.basename(file, '.json'))
         dolphinArgsArray.push([
           '-i', file,
           '-o', basename,
@@ -300,20 +300,20 @@ const subdirs = (rootdir) => new Promise((resolve, reject) => {
 const configureDolphin = async () => {
   const dolphinDirname = path.dirname(DOLPHIN_PATH)
   const gameSettingsFilename = path.join(dolphinDirname, 'User', 'GameSettings',
-                                         'GALE01.ini')
+    'GALE01.ini')
   const graphicsSettingsFilename = path.join(dolphinDirname, 'User', 'Config',
-                                             'GFX.ini')
+    'GFX.ini')
 
   // Game settings
-  let interface = readline.createInterface({
+  let rl = readline.createInterface({
     input: fs.createReadStream(gameSettingsFilename),
     crlfDelay: Infinity
   })
   let newSettings = []
-  for await (const line of interface) {
-    if (!(line.startsWith('$Game Music')
-          || line.startsWith('$Hide HUD')
-          || line.startsWith('$Widescreen'))) {
+  for await (const line of rl) {
+    if (!(line.startsWith('$Game Music') ||
+          line.startsWith('$Hide HUD') ||
+          line.startsWith('$Widescreen'))) {
       newSettings.push(line)
     }
   }
@@ -324,13 +324,13 @@ const configureDolphin = async () => {
   await fsPromises.writeFile(gameSettingsFilename, newSettings.join('\n'))
 
   // Graphics settings
-  interface = readline.createInterface({
+  rl = readline.createInterface({
     input: fs.createReadStream(graphicsSettingsFilename),
     crlfDelay: Infinity
   })
   newSettings = []
   const aspectRatioSetting = WIDESCREEN_OFF ? 5 : 6
-  for await (const line of interface) {
+  for await (const line of rl) {
     if (line.startsWith('AspectRatio')) {
       newSettings.push(`AspectRatio = ${aspectRatioSetting}`)
     } else {
@@ -338,7 +338,7 @@ const configureDolphin = async () => {
     }
   }
   await fsPromises.writeFile(graphicsSettingsFilename,
-                             newSettings.join('\n'))
+    newSettings.join('\n'))
 }
 
 const main = async () => {
