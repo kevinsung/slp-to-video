@@ -26,21 +26,20 @@ const os = require('os')
 const path = require('path')
 const dir = require('node-dir')
 const { default: SlippiGame } = require('slp-parser-js')
-const argv = require('yargs').argv
+const argv = require('yargs')
+  .default('num-cpus', 1)
+  .default('dolphin-path', path.join(
+    'Ishiiruka', 'build', 'Binaries', 'dolphin-emu'))
+  .default('ssbm-iso-path', 'SSBM.iso')
+  .default('tmpdir', path.join(
+    os.tmpdir(), `tmp-${crypto.randomBytes(12).toString('hex')}`))
+  .argv
 
-const DEFAULT_NUM_PROCESSES = 1
-const DEFAULT_DOLPHIN_PATH = path.resolve(
-  path.join('Ishiiruka', 'build', 'Binaries', 'dolphin-emu'))
-const DEFAULT_SSBM_ISO_PATH = path.resolve('SSBM.iso')
-
-const INPUT_FILE = path.resolve(argv.input)
-const NUM_PROCESSES = argv.num_cpus ? argv.num_cpus : DEFAULT_NUM_PROCESSES
-const DOLPHIN_PATH = argv.dolphin_path ? path.resolve(
-  argv.dolphin_path) : DEFAULT_DOLPHIN_PATH
-const SSBM_ISO_PATH = argv.ssbm_iso_path? path.resolve(
-  argv.ssbm_iso_path) : DEFAULT_SSBM_ISO_PATH
-const TMPDIR = argv.tmpdir ? path.resolve(argv.tmpdir) : path.join(
-  os.tmpdir(), `tmp-${crypto.randomBytes(12).toString('hex')}`)
+const INPUT_FILE = path.resolve(argv._[0])
+const NUM_PROCESSES = argv.numCpus
+const DOLPHIN_PATH = path.resolve(argv.dolphinPath)
+const SSBM_ISO_PATH = path.resolve(argv.ssbmIsoPath)
+const TMPDIR = path.resolve(argv.tmpdir)
 
 const generateReplayConfigs = async (replays, basedir) => {
   const dirname = path.join(basedir,
