@@ -28,11 +28,19 @@ const dir = require('node-dir')
 const { default: SlippiGame } = require('slp-parser-js')
 const argv = require('yargs').argv
 
+const DEFAULT_NUM_PROCESSES = 1
+const DEFAULT_DOLPHIN_PATH = path.resolve(
+  path.join('Ishiiruka', 'build', 'Binaries', 'dolphin-emu'))
+const DEFAULT_SSBM_ISO_PATH = path.resolve('SSBM.iso')
+
 const INPUT_FILE = path.resolve(argv.input)
-const DOLPHIN_PATH = path.resolve(argv.dolphin_path)
-const SSBM_ISO_PATH = path.resolve(argv.ssbm_iso_path)
-const NUM_PROCESSES = argv.num_cpus
-const TMPDIR = argv.tmpdir
+const NUM_PROCESSES = argv.num_cpus ? argv.num_cpus : DEFAULT_NUM_PROCESSES
+const DOLPHIN_PATH = argv.dolphin_path ? path.resolve(
+  argv.dolphin_path) : DEFAULT_DOLPHIN_PATH
+const SSBM_ISO_PATH = argv.ssbm_iso_path? path.resolve(
+  argv.ssbm_iso_path) : DEFAULT_SSBM_ISO_PATH
+const TMPDIR = argv.tmpdir ? path.resolve(argv.tmpdir) : path.join(
+  os.tmpdir(), `tmp-${crypto.randomBytes(12).toString('hex')}`)
 
 const generateReplayConfigs = async (replays, basedir) => {
   const dirname = path.join(basedir,
@@ -284,24 +292,22 @@ const subdirs = (rootdir) => new Promise((resolve, reject) => {
 })
 
 const main = () => {
-  const tmpdir = TMPDIR ? path.resolve(TMPDIR) : path.join(
-    os.tmpdir(), `tmp-${crypto.randomBytes(12).toString('hex')}`)
-  process.on('exit', (code) => fs.rmdirSync(tmpdir, { recursive: true }))
-  fsPromises.mkdir(tmpdir)
+  process.on('exit', (code) => fs.rmdirSync(TMPDIR, { recursive: true }))
+  fsPromises.mkdir(TMPDIR)
     .then(() => fsPromises.readFile(INPUT_FILE))
     .then(async (contents) => {
       const promises = []
       JSON.parse(contents).forEach(
-        (replays) => promises.push(generateReplayConfigs(replays, tmpdir))
+        (replays) => promises.push(generateReplayConfigs(replays, TMPDIR))
       )
       await Promise.all(promises)
     })
-    .then(() => files(tmpdir))
+    .then(() => files(TMPDIR))
     .then(async (files) => {
       files = files.filter((file) => path.extname(file) === '.json')
       await processReplayConfigs(files)
     })
-    .then(() => subdirs(tmpdir))
+    .then(() => subdirs(TMPDIR))
     .then(async (subdirs) => {
       const promises = []
       subdirs.forEach((dir) => promises.push(concatenateVideos(dir)))
