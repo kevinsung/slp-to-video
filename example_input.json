@@ -1,25 +1,26 @@
 [
-    {"outputPath": "/home/kjs/set1.avi",
+    {"outputPath": "set1.avi",
      "replays": [
-        {"replay": "/home/kjs/set1/game1.slp",
+        {"replay": "game1.slp",
          "startFrame": null,
          "endFrame": null
+         "overlayPath": "set1overlay.png"
         },
-        {"replay": "/home/kjs/set1/game2.slp",
-         "startFrame": null,
-         "endFrame": null
+        {"replay": "game2.slp",
+         "overlayPath": "set1overlay.png"
         }
      ]
     },
-    {"outputPath": "/home/kjs/set2.avi",
+    {"outputPath": "combovideo.avi",
      "replays": [
-        {"replay": "/home/kjs/set2/game1.slp",
+        {"replay": "clip1.slp",
          "startFrame": 0,
          "endFrame": 60 
         },
-        {"replay": "/home/kjs/set2/game2.slp",
+        {"replay": "clip2.slp",
          "startFrame": 100,
-         "endFrame": 200
+         "endFrame": 200,
+         "overlayPath": "clip2overlay.png"
         }
      ]
     }

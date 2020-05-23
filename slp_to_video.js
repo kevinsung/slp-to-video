@@ -55,7 +55,8 @@ const generateReplayConfig = async (replay, index, basedir) => {
     startFrame: replay.startFrame != null ? replay.startFrame : -123,
     endFrame: replay.endFrame != null ? replay.endFrame : metadata.lastFrame,
     isRealTimeMode: false,
-    commandId: `${crypto.randomBytes(12).toString('hex')}`
+    commandId: `${crypto.randomBytes(12).toString('hex')}`,
+    overlayPath: replay.overlayPath
   }
   const configFn = path.join(basedir, `${index}.json`)
   await fsPromises.writeFile(configFn, JSON.stringify(config))
@@ -128,27 +129,49 @@ const processReplayConfigs = async (files) => {
   const dolphinArgsArray = []
   const ffmpegMergeArgsArray = []
   const ffmpegBlackDetectArgsArray = []
+  const ffmpegTrimArgsArray = []
+  const ffmpegOverlayArgsArray = []
+  const replaysWithOverlays = []
+  let promises = []
 
   files.forEach((file) => {
-    const basename = path.join(path.dirname(file), path.basename(file, '.json'))
-    dolphinArgsArray.push([
-      '-i', file,
-      '-o', basename,
-      '-b', '-e', SSBM_ISO_PATH
-    ])
-    ffmpegMergeArgsArray.push([
-      '-i', `${basename}.avi`,
-      '-i', `${basename}.wav`,
-      '-b:v', '15M',
-      `${basename}-merged.avi`
-    ])
-    ffmpegBlackDetectArgsArray.push([
-      '-i', `${basename}-merged.avi`,
-      '-vf', 'blackdetect=d=0.01:pix_th=0.01',
-      '-max_muxing_queue_size', '9999',
-      '-f', 'null', '-'
-    ])
+    promise = fsPromises.readFile(file)
+      .then((contents) => {
+        const overlayPath = JSON.parse(contents).overlayPath
+        const basename = path.join(path.dirname(file),
+                                   path.basename(file, '.json'))
+        dolphinArgsArray.push([
+          '-i', file,
+          '-o', basename,
+          '-b', '-e', SSBM_ISO_PATH
+        ])
+        ffmpegMergeArgsArray.push([
+          '-i', `${basename}.avi`,
+          '-i', `${basename}.wav`,
+          '-b:v', '15M',
+          `${basename}-merged.avi`
+        ])
+        ffmpegBlackDetectArgsArray.push([
+          '-i', `${basename}-merged.avi`,
+          '-vf', 'blackdetect=d=0.01:pix_th=0.01',
+          '-max_muxing_queue_size', '9999',
+          '-f', 'null', '-'
+        ])
+        if (overlayPath) {
+          ffmpegOverlayArgsArray.push([
+            '-i', `${basename}-trimmed.avi`,
+            '-i', overlayPath,
+            '-b:v', '15M',
+            '-filter_complex',
+            '[0:v][1:v] overlay',
+            `${basename}-overlaid.avi`
+          ])
+          replaysWithOverlays.push(basename)
+        }
+      })
+    promises.push(promise)
   })
+  await Promise.all(promises)
 
   // Dump frames to video and audio
   await executeCommandsInQueue(DOLPHIN_PATH, dolphinArgsArray, NUM_PROCESSES,
@@ -158,7 +181,7 @@ const processReplayConfigs = async (files) => {
   await executeCommandsInQueue('ffmpeg', ffmpegMergeArgsArray, NUM_PROCESSES)
 
   // Delete files to save space
-  let promises = []
+  promises = []
   files.forEach((file) => {
     const basename = path.join(path.dirname(file), path.basename(file, '.json'))
     promises.push(fsPromises.unlink(`${basename}.avi`))
@@ -171,7 +194,6 @@ const processReplayConfigs = async (files) => {
     NUM_PROCESSES, saveBlackFrames)
 
   // Trim black frames
-  const ffmpegTrimArgsArray = []
   promises = []
   files.forEach((file) => {
     const basename = path.join(path.dirname(file), path.basename(file, '.json'))
@@ -198,17 +220,29 @@ const processReplayConfigs = async (files) => {
   })
   await Promise.all(promises)
   await executeCommandsInQueue('ffmpeg', ffmpegTrimArgsArray, NUM_PROCESSES)
+
+  // Add overlay
+  await executeCommandsInQueue('ffmpeg', ffmpegOverlayArgsArray, NUM_PROCESSES)
+
+  // Delete non-overlaid videos
+  promises = []
+  replaysWithOverlays.forEach((basename) => {
+    promises.push(fsPromises.unlink(`${basename}-trimmed.avi`))
+  })
+  await Promise.all(promises)
 }
 
 const concatenateVideos = async (dir) => {
   await fsPromises.readdir(dir)
     .then(async (files) => {
-      files = files.filter((file) => file.endsWith('trimmed.avi'))
-      if (!files.length) return
-      files.sort()
+      let replayVideos = files.filter((file) => file.endsWith('trimmed.avi'))
+      replayVideos = replayVideos.concat(
+        files.filter((file) => file.endsWith('overlaid.avi')))
+      if (!replayVideos.length) return
+      replayVideos.sort()
       const concatFn = path.join(dir, 'concat.txt')
       const stream = fs.createWriteStream(concatFn)
-      files.forEach((file) => {
+      replayVideos.forEach((file) => {
         stream.write(`file '${path.join(dir, file)}'\n`)
       })
       stream.end()
