@@ -24,6 +24,7 @@ const fs = require('fs')
 const fsPromises = require('fs').promises
 const os = require('os')
 const path = require('path')
+const readline = require('readline')
 const dir = require('node-dir')
 const { default: SlippiGame } = require('slp-parser-js')
 const argv = require('yargs')
@@ -33,6 +34,9 @@ const argv = require('yargs')
   .default('ssbm-iso-path', 'SSBM.iso')
   .default('tmpdir', path.join(
     os.tmpdir(), `tmp-${crypto.randomBytes(12).toString('hex')}`))
+  .boolean('game-music-on')
+  .boolean('hide-hud')
+  .boolean('widescreen-off')
   .argv
 
 const INPUT_FILE = path.resolve(argv._[0])
@@ -40,6 +44,9 @@ const NUM_PROCESSES = argv.numCpus
 const DOLPHIN_PATH = path.resolve(argv.dolphinPath)
 const SSBM_ISO_PATH = path.resolve(argv.ssbmIsoPath)
 const TMPDIR = path.resolve(argv.tmpdir)
+const GAME_MUSIC_ON = argv.gameMusicOn
+const HIDE_HUD = argv.hideHud
+const WIDESCREEN_OFF = argv.widescreenOff
 
 const generateReplayConfigs = async (replays, basedir) => {
   const dirname = path.join(basedir,
@@ -290,7 +297,52 @@ const subdirs = (rootdir) => new Promise((resolve, reject) => {
   })
 })
 
-const main = () => {
+const configureDolphin = async () => {
+  const dolphinDirname = path.dirname(DOLPHIN_PATH)
+  const gameSettingsFilename = path.join(dolphinDirname, 'User', 'GameSettings',
+                                         'GALE01.ini')
+  const graphicsSettingsFilename = path.join(dolphinDirname, 'User', 'Config',
+                                             'GFX.ini')
+
+  // Game settings
+  let interface = readline.createInterface({
+    input: fs.createReadStream(gameSettingsFilename),
+    crlfDelay: Infinity
+  })
+  let newSettings = []
+  for await (const line of interface) {
+    if (!(line.startsWith('$Game Music')
+          || line.startsWith('$Hide HUD')
+          || line.startsWith('$Widescreen'))) {
+      newSettings.push(line)
+    }
+  }
+  const gameMusicSetting = GAME_MUSIC_ON ? 'ON' : 'OFF'
+  newSettings.push(`$Game Music ${gameMusicSetting}`)
+  if (HIDE_HUD) newSettings.push('$Hide HUD')
+  if (!WIDESCREEN_OFF) newSettings.push('$Widescreen 16:9')
+  await fsPromises.writeFile(gameSettingsFilename, newSettings.join('\n'))
+
+  // Graphics settings
+  interface = readline.createInterface({
+    input: fs.createReadStream(graphicsSettingsFilename),
+    crlfDelay: Infinity
+  })
+  newSettings = []
+  const aspectRatioSetting = WIDESCREEN_OFF ? 5 : 6
+  for await (const line of interface) {
+    if (line.startsWith('AspectRatio')) {
+      newSettings.push(`AspectRatio = ${aspectRatioSetting}`)
+    } else {
+      newSettings.push(line)
+    }
+  }
+  await fsPromises.writeFile(graphicsSettingsFilename,
+                             newSettings.join('\n'))
+}
+
+const main = async () => {
+  await configureDolphin()
   process.on('exit', (code) => fs.rmdirSync(TMPDIR, { recursive: true }))
   fsPromises.mkdir(TMPDIR)
     .then(() => fsPromises.readFile(INPUT_FILE))
