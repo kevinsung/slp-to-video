@@ -134,6 +134,7 @@ const processReplayConfigs = async (files) => {
   const replaysWithOverlays = []
   let promises = []
 
+  // Construct arguments to commands
   files.forEach((file) => {
     promise = fsPromises.readFile(file)
       .then((contents) => {
@@ -180,7 +181,7 @@ const processReplayConfigs = async (files) => {
   // Merge video and audio files
   await executeCommandsInQueue('ffmpeg', ffmpegMergeArgsArray, NUM_PROCESSES)
 
-  // Delete files to save space
+  // Delete unmerged video and audio files to save space
   promises = []
   files.forEach((file) => {
     const basename = path.join(path.dirname(file), path.basename(file, '.json'))
@@ -221,10 +222,18 @@ const processReplayConfigs = async (files) => {
   await Promise.all(promises)
   await executeCommandsInQueue('ffmpeg', ffmpegTrimArgsArray, NUM_PROCESSES)
 
+  // Delete untrimmed video files to save space
+  promises = []
+  files.forEach((file) => {
+    const basename = path.join(path.dirname(file), path.basename(file, '.json'))
+    promises.push(fsPromises.unlink(`${basename}-merged.avi`))
+  })
+  await Promise.all(promises)
+
   // Add overlay
   await executeCommandsInQueue('ffmpeg', ffmpegOverlayArgsArray, NUM_PROCESSES)
 
-  // Delete non-overlaid videos
+  // Delete non-overlaid video files
   promises = []
   replaysWithOverlays.forEach((basename) => {
     promises.push(fsPromises.unlink(`${basename}-trimmed.avi`))
