@@ -28,18 +28,51 @@ const readline = require('readline')
 const dir = require('node-dir')
 const { default: SlippiGame } = require('slp-parser-js')
 const argv = require('yargs')
-  .default('num-cpus', 1)
-  .default('dolphin-path', path.join(
-    'Ishiiruka', 'build', 'Binaries', 'dolphin-emu'))
-  .default('ssbm-iso-path', 'SSBM.iso')
-  .default('tmpdir', path.join(
-    os.tmpdir(), `tmp-${crypto.randomBytes(12).toString('hex')}`))
-  .boolean('game-music-on')
-  .boolean('hide-hud')
-  .boolean('widescreen-off')
-  .argv
+  .command(
+    '$0 INPUT_FILE',
+    'Convert .slp files to video in AVI format.',
+    (yargs) => {
+      yargs.positional('INPUT_FILE', {
+        describe: ('Describes the input .slp files and output filenames. ' +
+                   'See example_input.json for an example.'),
+        type: 'string'
+      })
+      yargs.option('num-cpus', {
+        describe: 'The number of processes to use.',
+        default: 1,
+        type: 'number'
+      })
+      yargs.option('dolphin-path', {
+        describe: 'Path to the Dolphin executable.',
+        default: path.join('Ishiiruka', 'build', 'Binaries', 'dolphin-emu'),
+        type: 'string'
+      })
+      yargs.option('ssbm-iso-path', {
+        describe: 'Path to the SSBM ISO image.',
+        default: 'SSBM.iso',
+        type: 'string'
+      })
+      yargs.option('game-music-on', {
+        describe: 'Turn game music on.',
+        type: 'boolean'
+      })
+      yargs.option('hide-hud', {
+        describe: 'Hide percentage and stock icons.',
+        type: 'boolean'
+      })
+      yargs.option('widescreen-off', {
+        describe: 'Turn off widescreen.',
+        type: 'boolean'
+      })
+      yargs.option('tmpdir', {
+        describe: 'Temporary directory to use (temporary files may be large).',
+        default: path.join(os.tmpdir(),
+                           `tmp-${crypto.randomBytes(12).toString('hex')}`),
+        type: 'string'
+      })
+    }).argv
 
-const INPUT_FILE = path.resolve(argv._[0])
+const INPUT_FILE = path.resolve(argv.INPUT_FILE)
 const NUM_PROCESSES = argv.numCpus
 const DOLPHIN_PATH = path.resolve(argv.dolphinPath)
 const SSBM_ISO_PATH = path.resolve(argv.ssbmIsoPath)
