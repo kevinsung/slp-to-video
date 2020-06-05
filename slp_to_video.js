@@ -24,16 +24,77 @@ const fs = require('fs')
 const fsPromises = require('fs').promises
 const os = require('os')
 const path = require('path')
+const readline = require('readline')
 const dir = require('node-dir')
 const { default: SlippiGame } = require('slp-parser-js')
-const argv = require('yargs').argv
+const argv = module === require.main ? require('yargs')
+  .command(
+    '$0 INPUT_FILE',
+    'Convert .slp files to video in AVI format.',
+    (yargs) => {
+      yargs.positional('INPUT_FILE', {
+        describe: ('Describes the input .slp files and output filenames. ' +
+                   'See example_input.json for an example.'),
+        type: 'string'
+      })
+      yargs.option('num-cpus', {
+        describe: 'The number of processes to use.',
+        default: 1,
+        type: 'number'
+      })
+      yargs.option('dolphin-path', {
+        describe: 'Path to the Dolphin executable.',
+        default: path.join('Ishiiruka', 'build', 'Binaries', 'dolphin-emu'),
+        type: 'string'
+      })
+      yargs.option('ssbm-iso-path', {
+        describe: 'Path to the SSBM ISO image.',
+        default: 'SSBM.iso',
+        type: 'string'
+      })
+      yargs.option('game-music-on', {
+        describe: 'Turn game music on.',
+        type: 'boolean'
+      })
+      yargs.option('hide-hud', {
+        describe: 'Hide percentage and stock icons.',
+        type: 'boolean'
+      })
+      yargs.option('widescreen-off', {
+        describe: 'Turn off widescreen.',
+        type: 'boolean'
+      })
+      yargs.option('tmpdir', {
+        describe: 'Temporary directory to use (temporary files may be large).',
+        type: 'string'
+      })
+      yargs.option('verbose', {
+        describe: 'Print steps to screen',
+        type: 'boolean',
+        default: false
+      })
+    }).argv : null
 
-let INPUT_FILE = argv.input ? path.resolve(argv.input) : null
-let DOLPHIN_PATH = argv.dolphin_path ? path.resolve(argv.dolphin_path) : null
-let SSBM_ISO_PATH = argv.ssbm_iso_path ? path.resolve(argv.ssbm_iso_path) : null
-let NUM_PROCESSES = argv.num_cpus ? argv.num_cpus : null
-let EVENT_TRACKER = {emit:()=>{}}
+let INPUT_FILE = argv ? path.resolve(argv.INPUT_FILE) : null
+let NUM_PROCESSES = argv ? argv.numCpus : null
+let DOLPHIN_PATH = argv ? path.resolve(argv.dolphinPath) : null
+let SSBM_ISO_PATH = argv ? path.resolve(argv.ssbmIsoPath) : null
+let TMPDIR = argv ? path.resolve(argv.tmpdir) 
+  : path.join(os.tmpdir(),`tmp-${crypto.randomBytes(12).toString('hex')}`)
+let GAME_MUSIC_ON = argv ? argv.gameMusicOn : null
+let HIDE_HUD = argv ? argv.hideHud : null
+let WIDESCREEN_OFF = argv ? argv.widescreenOff : null
+let VERBOSE = argv ? argv.verbose : null
+let TOTAL_REPLAYS = 0
 let COUNT = 0
+let EVENT_TRACKER = { emit: VERBOSE ? (tag,msg)=>{
+  if( tag === 'primaryEventMsg') console.log(`\n${msg}`)
+  if( tag === 'count' ) {
+    process.stdout.clearLine()
+    process.stdout.cursorTo(0)
+    process.stdout.write(`${COUNT}/${TOTAL_REPLAYS}`)
+  }
+} : () => {}}
 
 const generateReplayConfigs = async (replays, basedir) => {
   const dirname = path.join(basedir,
@@ -42,12 +103,12 @@ const generateReplayConfigs = async (replays, basedir) => {
   await fsPromises.writeFile(path.join(dirname, 'outputPath.txt'),
     replays.outputPath)
   await fsPromises.mkdir(dirname, { recursive: true })
-  replays.replays.forEach(
-    (replay) => generateReplayConfig(replay, dirname)
-  )
+  for (const [index, replay] of replays.replays.entries()) {
+    generateReplayConfig(replay, index, dirname)
+  }
 }
 
-const generateReplayConfig = async (replay, basedir) => {
+const generateReplayConfig = async (replay, index, basedir) => {
   const game = new SlippiGame(replay.replay)
   const metadata = game.getMetadata()
   const config = {
@@ -56,10 +117,10 @@ const generateReplayConfig = async (replay, basedir) => {
     startFrame: replay.startFrame != null ? replay.startFrame : -123,
     endFrame: replay.endFrame != null ? replay.endFrame : metadata.lastFrame,
     isRealTimeMode: false,
-    commandId: `${crypto.randomBytes(12).toString('hex')}`
+    commandId: `${crypto.randomBytes(12).toString('hex')}`,
+    overlayPath: replay.overlayPath
   }
-  const configFn = path.join(basedir,
-                             `${metadata.startAt.replace(/:/g, '')}.json`)
+  const configFn = path.join(basedir, `${index}.json`)
   await fsPromises.writeFile(configFn, JSON.stringify(config))
 }
 
@@ -131,27 +192,50 @@ const processReplayConfigs = async (files) => {
   const dolphinArgsArray = []
   const ffmpegMergeArgsArray = []
   const ffmpegBlackDetectArgsArray = []
+  const ffmpegTrimArgsArray = []
+  const ffmpegOverlayArgsArray = []
+  const replaysWithOverlays = []
+  let promises = []
 
+  // Construct arguments to commands
   files.forEach((file) => {
-    const basename = path.join(path.dirname(file), path.basename(file, '.json'))
-    dolphinArgsArray.push([
-      '-i', file,
-      '-o', basename,
-      '-b', '-e', SSBM_ISO_PATH
-    ])
-    ffmpegMergeArgsArray.push([
-      '-i', `${basename}.avi`,
-      '-i', `${basename}.wav`,
-      '-b:v', '15M',
-      `${basename}-merged.avi`
-    ])
-    ffmpegBlackDetectArgsArray.push([
-      '-i', `${basename}-merged.avi`,
-      '-vf', 'blackdetect=d=0.01:pix_th=0.01',
-      '-max_muxing_queue_size', '1024',
-      '-f', 'null', '-'
-    ])
+    const promise = fsPromises.readFile(file)
+      .then((contents) => {
+        const overlayPath = JSON.parse(contents).overlayPath
+        const basename = path.join(path.dirname(file),
+          path.basename(file, '.json'))
+        dolphinArgsArray.push([
+          '-i', file,
+          '-o', basename,
+          '-b', '-e', SSBM_ISO_PATH
+        ])
+        ffmpegMergeArgsArray.push([
+          '-i', `${basename}.avi`,
+          '-i', `${basename}.wav`,
+          '-b:v', '15M',
+          `${basename}-merged.avi`
+        ])
+        ffmpegBlackDetectArgsArray.push([
+          '-i', `${basename}-merged.avi`,
+          '-vf', 'blackdetect=d=0.01:pix_th=0.01',
+          '-max_muxing_queue_size', '9999',
+          '-f', 'null', '-'
+        ])
+        if (overlayPath) {
+          ffmpegOverlayArgsArray.push([
+            '-i', `${basename}-trimmed.avi`,
+            '-i', overlayPath,
+            '-b:v', '15M',
+            '-filter_complex',
+            '[0:v][1:v] overlay',
+            `${basename}-overlaid.avi`
+          ])
+          replaysWithOverlays.push(basename)
+        }
+      })
+    promises.push(promise)
   })
+  await Promise.all(promises)
 
   // Dump frames to video and audio
   EVENT_TRACKER.emit('primaryEventMsg','Generating videos...')
@@ -164,14 +248,14 @@ const processReplayConfigs = async (files) => {
   COUNT = 0;
   await executeCommandsInQueue('ffmpeg', ffmpegMergeArgsArray, NUM_PROCESSES)
 
-  // Delete files to save space
-  // let promises = []
-  // files.forEach((file) => {
-  //   const basename = path.join(path.dirname(file), path.basename(file, '.json'))
-  //   promises.push(fsPromises.unlink(`${basename}.avi`))
-  //   promises.push(fsPromises.unlink(`${basename}.wav`))
-  // })
-  // await Promise.all(promises)
+  // Delete unmerged video and audio files to save space
+  promises = []
+  files.forEach((file) => {
+    const basename = path.join(path.dirname(file), path.basename(file, '.json'))
+    promises.push(fsPromises.unlink(`${basename}.avi`))
+    promises.push(fsPromises.unlink(`${basename}.wav`))
+  })
+  await Promise.all(promises)
 
   // Find black frames
   EVENT_TRACKER.emit('primaryEventMsg','Detecting black frames...')
@@ -180,9 +264,6 @@ const processReplayConfigs = async (files) => {
     NUM_PROCESSES, saveBlackFrames)
 
   // Trim black frames
-  EVENT_TRACKER.emit('primaryEventMsg','Generating black frame trim arguments...')
-  COUNT = 0;
-  const ffmpegTrimArgsArray = []
   promises = []
   files.forEach((file) => {
     const basename = path.join(path.dirname(file), path.basename(file, '.json'))
@@ -190,10 +271,6 @@ const processReplayConfigs = async (files) => {
       { encoding: 'utf8' })
       .then((contents) => {
         const blackFrames = JSON.parse(contents)
-        if(!blackFrames[0]){
-          EVENT_TRACKER.emit('errorEventMsg',{msg:`No black frames found in ${file}`,file});
-          return;
-        }
         let trimParameters = `start=${blackFrames[0].blackEnd}`
         if (blackFrames.length > 1) {
           trimParameters = trimParameters.concat(
@@ -215,17 +292,39 @@ const processReplayConfigs = async (files) => {
   EVENT_TRACKER.emit('primaryEventMsg','Trimming black frames...')
   COUNT = 0;
   await executeCommandsInQueue('ffmpeg', ffmpegTrimArgsArray, NUM_PROCESSES)
+
+  // Delete untrimmed video files to save space
+  promises = []
+  files.forEach((file) => {
+    const basename = path.join(path.dirname(file), path.basename(file, '.json'))
+    promises.push(fsPromises.unlink(`${basename}-merged.avi`))
+  })
+  await Promise.all(promises)
+
+  // Add overlay
+  if(ffmpegOverlayArgsArray.length) EVENT_TRACKER.emit('primaryEventMsg','Adding Overlays...')
+  COUNT = 0;
+  await executeCommandsInQueue('ffmpeg', ffmpegOverlayArgsArray, NUM_PROCESSES)
+
+  // Delete non-overlaid video files
+  promises = []
+  replaysWithOverlays.forEach((basename) => {
+    promises.push(fsPromises.unlink(`${basename}-trimmed.avi`))
+  })
+  await Promise.all(promises)
 }
 
 const concatenateVideos = async (dir) => {
   await fsPromises.readdir(dir)
     .then(async (files) => {
-      files = files.filter((file) => file.endsWith('trimmed.avi'))
-      if (!files.length) return
-      files.sort()
+      let replayVideos = files.filter((file) => file.endsWith('trimmed.avi'))
+      replayVideos = replayVideos.concat(
+        files.filter((file) => file.endsWith('overlaid.avi')))
+      if (!replayVideos.length) return
+      replayVideos.sort()
       const concatFn = path.join(dir, 'concat.txt')
       const stream = fs.createWriteStream(concatFn)
-      files.forEach((file) => {
+      replayVideos.forEach((file) => {
         stream.write(`file '${path.join(dir, file)}'\n`)
       })
       stream.end()
@@ -239,7 +338,6 @@ const concatenateVideos = async (dir) => {
             outputPath]
           const process = spawn('ffmpeg', args)
           await exit(process)
-          EVENT_TRACKER.emit('count',COUNT++)
         })
     })
 }
@@ -258,57 +356,90 @@ const subdirs = (rootdir) => new Promise((resolve, reject) => {
   })
 })
 
-const main = (config) => {
-  return new Promise((resolve,reject) => {
-    try {
-      if(config){
-        INPUT_FILE = config.INPUT_FILE
-        DOLPHIN_PATH = config.DOLPHIN_PATH
-        SSBM_ISO_PATH = config.SSBM_ISO_PATH
-        NUM_PROCESSES = config.NUM_PROCESSES
-        EVENT_TRACKER = config.EVENT_TRACKER;
-      }
-      
-      EVENT_TRACKER.emit('primaryEventMsg','Creating tmp directory...')
-      const tmpdir = path.join(os.tmpdir(),
-                              `tmp-${crypto.randomBytes(12).toString('hex')}`)
-      
-      fsPromises.mkdir(tmpdir)
-        .then(() => {
-          EVENT_TRACKER.emit('primaryEventMsg','Reading input file...')
-          return fsPromises.readFile(INPUT_FILE)
-        })
-        .then(async (contents) => {
-          const promises = []
-          EVENT_TRACKER.emit('primaryEventMsg','Generating replay configs...')
-          JSON.parse(contents).forEach(
-            (replays) => promises.push(generateReplayConfigs(replays, tmpdir))
-          )
-          await Promise.all(promises)
-        })
-        .then(() => files(tmpdir))
-        .then(async (files) => {
-          files = files.filter((file) => path.extname(file) === '.json')
-          EVENT_TRACKER.emit('primaryEventMsg','Processing replay configs...')
-          await processReplayConfigs(files)
-        })
-        .then(() => subdirs(tmpdir))
-        .then(async (subdirs) => {
-          const promises = []
-          subdirs.forEach((dir) => promises.push(concatenateVideos(dir)))
-          EVENT_TRACKER.emit('primaryEventMsg','Concatenating videos...')
-          COUNT = 0;
-          await Promise.all(promises)
-        })
-        .then(() => {
-          fsPromises.rmdir(tmpdir, { recursive: true })
-          resolve();
-        })
-    } catch(err){
-      reject(err);
-    }
-    
+const configureDolphin = async () => {
+  const dolphinDirname = path.dirname(DOLPHIN_PATH)
+  const gameSettingsFilename = path.join(dolphinDirname, 'User', 'GameSettings',
+    'GALE01.ini')
+  const graphicsSettingsFilename = path.join(dolphinDirname, 'User', 'Config',
+    'GFX.ini')
+
+  // Game settings
+  let rl = readline.createInterface({
+    input: fs.createReadStream(gameSettingsFilename),
+    crlfDelay: Infinity
   })
+  let newSettings = []
+  for await (const line of rl) {
+    if (!(line.startsWith('$Game Music') ||
+          line.startsWith('$Hide HUD') ||
+          line.startsWith('$Widescreen'))) {
+      newSettings.push(line)
+    }
+  }
+  const gameMusicSetting = GAME_MUSIC_ON ? 'ON' : 'OFF'
+  newSettings.push(`$Game Music ${gameMusicSetting}`)
+  if (HIDE_HUD) newSettings.push('$Hide HUD')
+  if (!WIDESCREEN_OFF) newSettings.push('$Widescreen 16:9')
+  await fsPromises.writeFile(gameSettingsFilename, newSettings.join('\n'))
+
+  // Graphics settings
+  rl = readline.createInterface({
+    input: fs.createReadStream(graphicsSettingsFilename),
+    crlfDelay: Infinity
+  })
+  newSettings = []
+  const aspectRatioSetting = WIDESCREEN_OFF ? 5 : 6
+  for await (const line of rl) {
+    if (line.startsWith('AspectRatio')) {
+      newSettings.push(`AspectRatio = ${aspectRatioSetting}`)
+    } else {
+      newSettings.push(line)
+    }
+  }
+  await fsPromises.writeFile(graphicsSettingsFilename,
+    newSettings.join('\n'))
+}
+
+const main = async (config) => {
+  console.log(config)
+  if(config){
+    INPUT_FILE = config.INPUT_FILE
+    DOLPHIN_PATH = config.DOLPHIN_PATH
+    SSBM_ISO_PATH = config.SSBM_ISO_PATH
+    NUM_PROCESSES = config.NUM_PROCESSES
+    EVENT_TRACKER = config.EVENT_TRACKER
+    TMPDIR = config.TMPDIR ? config.TMPDIR : TMPDIR
+    GAME_MUSIC_ON = config.GAME_MUSIC_ON
+    HIDE_HUD = config.HID_HUD
+    WIDESCREEN_OFF = config.WIDESCREEN_OFF
+  }
+  await configureDolphin()
+  process.on('exit', (code) => fs.rmdirSync(TMPDIR, { recursive: true }))
+  fsPromises.mkdir(TMPDIR)
+    .then(() => fsPromises.readFile(INPUT_FILE))
+    .then(async (contents) => {
+      const promises = []
+      JSON.parse(contents).forEach(
+        (replays) => {
+          TOTAL_REPLAYS += replays.replays.length
+          promises.push(generateReplayConfigs(replays, TMPDIR))
+        }
+      )
+      await Promise.all(promises)
+    })
+    .then(() => files(TMPDIR))
+    .then(async (files) => {
+      files = files.filter((file) => path.extname(file) === '.json')
+      await processReplayConfigs(files)
+    })
+    .then(() => subdirs(TMPDIR))
+    .then(async (subdirs) => {
+      const promises = []
+      subdirs.forEach((dir) => promises.push(concatenateVideos(dir)))
+      EVENT_TRACKER.emit('primaryEventMsg','Concatenating videos...')
+      await Promise.all(promises)
+      EVENT_TRACKER.emit('primaryEventMsg','Done')
+    })
 }
 
 if (module === require.main) {
