@@ -70,6 +70,11 @@ const argv = require('yargs')
                            `tmp-${crypto.randomBytes(12).toString('hex')}`),
         type: 'string'
       })
+      yargs.option('verbose', {
+        describe: 'Print steps to screen',
+        type: 'boolean',
+        default: false
+      })
     }).argv
 
 let INPUT_FILE = path.resolve(argv.INPUT_FILE)
