@@ -85,12 +85,16 @@ let TMPDIR = path.resolve(argv.tmpdir)
 let GAME_MUSIC_ON = argv.gameMusicOn
 let HIDE_HUD = argv.hideHud
 let WIDESCREEN_OFF = argv.widescreenOff
-let EVENT_TRACKER = { emit: argv.verbose ? (tag,msg)=>{
-  if( tag === 'primaryEventMsg') console.log(msg)
-  if( tag === 'count' ) process.stdout.write(`${COUNT}/${TOTAL_REPLAYS}`)
-} : () => {}}
 let TOTAL_REPLAYS = 0
 let COUNT = 0
+let EVENT_TRACKER = { emit: argv.verbose ? (tag,msg)=>{
+  if( tag === 'primaryEventMsg') console.log(`\n${msg}`)
+  if( tag === 'count' ) {
+    process.stdout.clearLine()
+    process.stdout.cursorTo(0)
+    process.stdout.write(`${COUNT}/${TOTAL_REPLAYS}`)
+  }
+} : () => {}}
 
 const generateReplayConfigs = async (replays, basedir) => {
   const dirname = path.join(basedir,
@@ -298,7 +302,7 @@ const processReplayConfigs = async (files) => {
   await Promise.all(promises)
 
   // Add overlay
-  EVENT_TRACKER.emit('primaryEventMsg','Adding Overlays...')
+  if(ffmpegOverlayArgsArray.length) EVENT_TRACKER.emit('primaryEventMsg','Adding Overlays...')
   COUNT = 0;
   await executeCommandsInQueue('ffmpeg', ffmpegOverlayArgsArray, NUM_PROCESSES)
 
@@ -416,17 +420,15 @@ const main = async (config) => {
       const promises = []
       JSON.parse(contents).forEach(
         (replays) => {
-          TOTAL_REPLAYS += replays.length
+          TOTAL_REPLAYS += replays.replays.length
           promises.push(generateReplayConfigs(replays, TMPDIR))
         }
       )
-      EVENT_TRACKER.emit('primaryEventMsg','Generating replay configs...')
       await Promise.all(promises)
     })
     .then(() => files(TMPDIR))
     .then(async (files) => {
       files = files.filter((file) => path.extname(file) === '.json')
-      EVENT_TRACKER.emit('primaryEventMsg','Processing replay configs...')
       await processReplayConfigs(files)
     })
     .then(() => subdirs(TMPDIR))
@@ -435,6 +437,7 @@ const main = async (config) => {
       subdirs.forEach((dir) => promises.push(concatenateVideos(dir)))
       EVENT_TRACKER.emit('primaryEventMsg','Concatenating videos...')
       await Promise.all(promises)
+      EVENT_TRACKER.emit('primaryEventMsg','Done')
     })
 }
 
