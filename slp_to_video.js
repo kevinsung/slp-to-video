@@ -27,7 +27,7 @@ const path = require('path')
 const readline = require('readline')
 const dir = require('node-dir')
 const { default: SlippiGame } = require('slp-parser-js')
-const argv = require('yargs')
+const argv = module === require.main ? require('yargs')
   .command(
     '$0 INPUT_FILE',
     'Convert .slp files to video in AVI format.',
@@ -66,8 +66,6 @@ const argv = require('yargs')
       })
       yargs.option('tmpdir', {
         describe: 'Temporary directory to use (temporary files may be large).',
-        default: path.join(os.tmpdir(),
-                           `tmp-${crypto.randomBytes(12).toString('hex')}`),
         type: 'string'
       })
       yargs.option('verbose', {
@@ -75,19 +73,21 @@ const argv = require('yargs')
         type: 'boolean',
         default: false
       })
-    }).argv
+    }).argv : null
 
-let INPUT_FILE = path.resolve(argv.INPUT_FILE)
-let NUM_PROCESSES = argv.numCpus
-let DOLPHIN_PATH = path.resolve(argv.dolphinPath)
-let SSBM_ISO_PATH = path.resolve(argv.ssbmIsoPath)
-let TMPDIR = path.resolve(argv.tmpdir)
-let GAME_MUSIC_ON = argv.gameMusicOn
-let HIDE_HUD = argv.hideHud
-let WIDESCREEN_OFF = argv.widescreenOff
+let INPUT_FILE = argv ? path.resolve(argv.INPUT_FILE) : null
+let NUM_PROCESSES = argv ? argv.numCpus : null
+let DOLPHIN_PATH = argv ? path.resolve(argv.dolphinPath) : null
+let SSBM_ISO_PATH = argv ? path.resolve(argv.ssbmIsoPath) : null
+let TMPDIR = argv ? path.resolve(argv.tmpdir) 
+  : path.join(os.tmpdir(),`tmp-${crypto.randomBytes(12).toString('hex')}`)
+let GAME_MUSIC_ON = argv ? argv.gameMusicOn : null
+let HIDE_HUD = argv ? argv.hideHud : null
+let WIDESCREEN_OFF = argv ? argv.widescreenOff : null
+let VERBOSE = argv ? argv.verbose : null
 let TOTAL_REPLAYS = 0
 let COUNT = 0
-let EVENT_TRACKER = { emit: argv.verbose ? (tag,msg)=>{
+let EVENT_TRACKER = { emit: VERBOSE ? (tag,msg)=>{
   if( tag === 'primaryEventMsg') console.log(`\n${msg}`)
   if( tag === 'count' ) {
     process.stdout.clearLine()
@@ -401,6 +401,7 @@ const configureDolphin = async () => {
 }
 
 const main = async (config) => {
+  console.log(config)
   if(config){
     INPUT_FILE = config.INPUT_FILE
     DOLPHIN_PATH = config.DOLPHIN_PATH
