@@ -135,7 +135,7 @@ const executeCommandsInQueue = async (command, argsArray, numWorkers,
     }
   }
   const workers = []
-  while (workers.length < NUM_PROCESSES) {
+  while (workers.length < numWorkers) {
     workers.push(worker())
   }
   while (workers.length > 0) {
