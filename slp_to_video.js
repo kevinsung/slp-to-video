@@ -121,12 +121,12 @@ const close = (stream) => new Promise((resolve, reject) => {
   })
 })
 
-const executeCommandsInQueue = async (command, argsArray, numWorkers,
+const executeCommandsInQueue = async (command, argsArray, numWorkers, options,
   onSpawn) => {
   const worker = async () => {
     let args
     while ((args = argsArray.pop()) !== undefined) {
-      const process = spawn(command, args)
+      const process = spawn(command, args, options)
       const exitPromise = exit(process)
       if (onSpawn) {
         await onSpawn(process, args)
@@ -223,10 +223,11 @@ const processReplayConfigs = async (files) => {
 
   // Dump frames to video and audio
   await executeCommandsInQueue(DOLPHIN_PATH, dolphinArgsArray, NUM_PROCESSES,
-    killDolphinOnEndFrame)
+    {}, killDolphinOnEndFrame)
 
   // Merge video and audio files
-  await executeCommandsInQueue('ffmpeg', ffmpegMergeArgsArray, NUM_PROCESSES)
+  await executeCommandsInQueue('ffmpeg', ffmpegMergeArgsArray, NUM_PROCESSES,
+    { stdio: 'ignore' })
 
   // Delete unmerged video and audio files to save space
   promises = []
@@ -239,7 +240,7 @@ const processReplayConfigs = async (files) => {
 
   // Find black frames
   await executeCommandsInQueue('ffmpeg', ffmpegBlackDetectArgsArray,
-    NUM_PROCESSES, saveBlackFrames)
+    NUM_PROCESSES, {}, saveBlackFrames)
 
   // Trim black frames
   promises = []
@@ -267,7 +268,8 @@ const processReplayConfigs = async (files) => {
     promises.push(promise)
   })
   await Promise.all(promises)
-  await executeCommandsInQueue('ffmpeg', ffmpegTrimArgsArray, NUM_PROCESSES)
+  await executeCommandsInQueue('ffmpeg', ffmpegTrimArgsArray, NUM_PROCESSES,
+    { stdio: 'ignore' })
 
   // Delete untrimmed video files to save space
   promises = []
@@ -278,7 +280,8 @@ const processReplayConfigs = async (files) => {
   await Promise.all(promises)
 
   // Add overlay
-  await executeCommandsInQueue('ffmpeg', ffmpegOverlayArgsArray, NUM_PROCESSES)
+  await executeCommandsInQueue('ffmpeg', ffmpegOverlayArgsArray, NUM_PROCESSES,
+    { stdio: 'ignore' })
 
   // Delete non-overlaid video files
   promises = []
