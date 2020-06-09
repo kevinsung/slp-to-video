@@ -410,7 +410,7 @@ const main = async (config) => {
     EVENT_TRACKER = config.EVENT_TRACKER
     TMPDIR = config.TMPDIR ? config.TMPDIR : TMPDIR
     GAME_MUSIC_ON = config.GAME_MUSIC_ON
-    HIDE_HUD = config.HID_HUD
+    HIDE_HUD = config.HIDE_HUD
     WIDESCREEN_OFF = config.WIDESCREEN_OFF
   }
   await configureDolphin()
