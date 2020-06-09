@@ -1,27 +1,27 @@
 [
-   {"outputPath": "set1.avi",
-    "replays": [
-       {"replay": "game1.slp",
-        "startFrame": null,
-        "endFrame": null,
-        "overlayPath": "set1overlay.png"
-       },
-       {"replay": "game2.slp",
-        "overlayPath": "set1overlay.png"
-       }
-    ]
-   },
-   {"outputPath": "combovideo.avi",
-    "replays": [
-       {"replay": "clip1.slp",
-        "startFrame": 0,
-        "endFrame": 60 
-       },
-       {"replay": "clip2.slp",
-        "startFrame": 100,
-        "endFrame": 200,
-        "overlayPath": "clip2overlay.png"
-       }
-    ]
-   }
+    {"outputPath": "set1.avi",
+     "replays": [
+        {"replay": "game1.slp",
+         "startFrame": null,
+         "endFrame": null,
+         "overlayPath": "set1overlay.png"
+        },
+        {"replay": "game2.slp",
+         "overlayPath": "set1overlay.png"
+        }
+     ]
+    },
+    {"outputPath": "combovideo.avi",
+     "replays": [
+        {"replay": "clip1.slp",
+         "startFrame": 0,
+         "endFrame": 60 
+        },
+        {"replay": "clip2.slp",
+         "startFrame": 100,
+         "endFrame": 200,
+         "overlayPath": "clip2overlay.png"
+        }
+     ]
+    }
 ]

@@ -136,12 +136,12 @@ const close = (stream) => new Promise((resolve, reject) => {
   })
 })
 
-const executeCommandsInQueue = async (command, argsArray, numWorkers,
+const executeCommandsInQueue = async (command, argsArray, numWorkers, options,
   onSpawn) => {
   const worker = async () => {
     let args
     while ((args = argsArray.pop()) !== undefined) {
-      const process = spawn(command, args)
+      const process = spawn(command, args, options)
       const exitPromise = exit(process)
       if (onSpawn) {
         await onSpawn(process, args)
@@ -151,7 +151,7 @@ const executeCommandsInQueue = async (command, argsArray, numWorkers,
     }
   }
   const workers = []
-  while (workers.length < NUM_PROCESSES) {
+  while (workers.length < numWorkers) {
     workers.push(worker())
   }
   while (workers.length > 0) {
@@ -241,12 +241,13 @@ const processReplayConfigs = async (files) => {
   EVENT_TRACKER.emit('primaryEventMsg','Generating videos...')
   COUNT = 0;
   await executeCommandsInQueue(DOLPHIN_PATH, dolphinArgsArray, NUM_PROCESSES,
-    killDolphinOnEndFrame)
+    {}, killDolphinOnEndFrame)
 
   // Merge video and audio files
   EVENT_TRACKER.emit('primaryEventMsg','Merging video and audio...')
   COUNT = 0;
-  await executeCommandsInQueue('ffmpeg', ffmpegMergeArgsArray, NUM_PROCESSES)
+  await executeCommandsInQueue('ffmpeg', ffmpegMergeArgsArray, NUM_PROCESSES,
+    { stdio: 'ignore' })
 
   // Delete unmerged video and audio files to save space
   promises = []
@@ -261,7 +262,7 @@ const processReplayConfigs = async (files) => {
   EVENT_TRACKER.emit('primaryEventMsg','Detecting black frames...')
   COUNT = 0;
   await executeCommandsInQueue('ffmpeg', ffmpegBlackDetectArgsArray,
-    NUM_PROCESSES, saveBlackFrames)
+    NUM_PROCESSES, {}, saveBlackFrames)
 
   // Trim black frames
   promises = []
@@ -291,7 +292,8 @@ const processReplayConfigs = async (files) => {
   await Promise.all(promises)
   EVENT_TRACKER.emit('primaryEventMsg','Trimming black frames...')
   COUNT = 0;
-  await executeCommandsInQueue('ffmpeg', ffmpegTrimArgsArray, NUM_PROCESSES)
+  await executeCommandsInQueue('ffmpeg', ffmpegTrimArgsArray, NUM_PROCESSES,
+    { stdio: 'ignore' })
 
   // Delete untrimmed video files to save space
   promises = []
@@ -304,7 +306,8 @@ const processReplayConfigs = async (files) => {
   // Add overlay
   if(ffmpegOverlayArgsArray.length) EVENT_TRACKER.emit('primaryEventMsg','Adding Overlays...')
   COUNT = 0;
-  await executeCommandsInQueue('ffmpeg', ffmpegOverlayArgsArray, NUM_PROCESSES)
+  await executeCommandsInQueue('ffmpeg', ffmpegOverlayArgsArray, NUM_PROCESSES,
+    { stdio: 'ignore' })
 
   // Delete non-overlaid video files
   promises = []
@@ -401,7 +404,6 @@ const configureDolphin = async () => {
 }
 
 const main = async (config) => {
-  console.log(config)
   if(config){
     INPUT_FILE = config.INPUT_FILE
     DOLPHIN_PATH = config.DOLPHIN_PATH
