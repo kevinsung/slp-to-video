@@ -417,7 +417,7 @@ const main = async (config) => {
   }
   await configureDolphin()
   process.on('exit', (code) => fs.rmdirSync(TMPDIR, { recursive: true }))
-  fsPromises.mkdir(TMPDIR)
+  await fsPromises.mkdir(TMPDIR)
     .then(() => fsPromises.readFile(INPUT_FILE))
     .then(async (contents) => {
       const promises = []
