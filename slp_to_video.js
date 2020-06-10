@@ -298,7 +298,12 @@ const concatenateVideos = async (dir) => {
       replayVideos = replayVideos.concat(
         files.filter((file) => file.endsWith('overlaid.avi')))
       if (!replayVideos.length) return
-      replayVideos.sort()
+      const regex = /([0-9]*).*/
+      replayVideos.sort((file1, file2) => {
+        const index1 = regex.exec(file1)[1]
+        const index2 = regex.exec(file2)[1]
+        return index1 - index2
+      })
       const concatFn = path.join(dir, 'concat.txt')
       const stream = fs.createWriteStream(concatFn)
       replayVideos.forEach((file) => {
