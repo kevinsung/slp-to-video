@@ -3,7 +3,7 @@
      "replays": [
         {"replay": "game1.slp",
          "startFrame": null,
-         "endFrame": null
+         "endFrame": null,
          "overlayPath": "set1overlay.png"
         },
         {"replay": "game2.slp",
