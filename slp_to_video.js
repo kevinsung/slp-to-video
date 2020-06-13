@@ -64,6 +64,11 @@ const argv = require('yargs')
         describe: 'Turn off widescreen.',
         type: 'boolean'
       })
+      yargs.option('bitrate-kbps', {
+        describe: 'Bitrate in kbps.',
+        default: 15000,
+        type: 'number'
+      })
       yargs.option('tmpdir', {
         describe: 'Temporary directory to use (temporary files may be large).',
         default: path.join(os.tmpdir(),
@@ -80,6 +85,7 @@ const TMPDIR = path.resolve(argv.tmpdir)
 const GAME_MUSIC_ON = argv.gameMusicOn
 const HIDE_HUD = argv.hideHud
 const WIDESCREEN_OFF = argv.widescreenOff
+const BITRATE_KBPS = argv.bitrateKbps
 
 const generateReplayConfigs = async (replays, basedir) => {
   const dirname = path.join(basedir,
@@ -196,7 +202,7 @@ const processReplayConfigs = async (files) => {
         ffmpegMergeArgsArray.push([
           '-i', `${basename}.avi`,
           '-i', `${basename}.wav`,
-          '-b:v', '15M',
+          '-b:v', `${BITRATE_KBPS}k`,
           `${basename}-merged.avi`
         ])
         ffmpegBlackDetectArgsArray.push([
@@ -209,7 +215,7 @@ const processReplayConfigs = async (files) => {
           ffmpegOverlayArgsArray.push([
             '-i', `${basename}-trimmed.avi`,
             '-i', overlayPath,
-            '-b:v', '15M',
+            '-b:v', `${BITRATE_KBPS}k`,
             '-filter_complex',
             '[0:v][1:v] overlay',
             `${basename}-overlaid.avi`
@@ -257,7 +263,7 @@ const processReplayConfigs = async (files) => {
         }
         ffmpegTrimArgsArray.push([
           '-i', `${basename}-merged.avi`,
-          '-b:v', '15M',
+          '-b:v', `${BITRATE_KBPS}k`,
           '-filter_complex',
           `[0:v]trim=${trimParameters},setpts=PTS-STARTPTS[v1];` +
           `[0:a]atrim=${trimParameters},asetpts=PTS-STARTPTS[a1]`,
@@ -374,6 +380,8 @@ const configureDolphin = async () => {
   for await (const line of rl) {
     if (line.startsWith('AspectRatio')) {
       newSettings.push(`AspectRatio = ${aspectRatioSetting}`)
+    } else if (line.startsWith('BitrateKbps')) {
+      newSettings.push(`BitrateKbps = ${BITRATE_KBPS}`)
     } else {
       newSettings.push(line)
     }
