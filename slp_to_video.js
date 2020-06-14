@@ -162,6 +162,7 @@ const killDolphinOnEndFrame = (process) => {
 }
 
 const saveBlackFrames = async (process, args) => {
+  const stderrClose = close(process.stderr)
   const basename = path.join(path.dirname(args[1]),
     path.basename(args[1], '.avi'))
   const blackFrameData = []
@@ -173,7 +174,7 @@ const saveBlackFrames = async (process, args) => {
       blackFrameData.push({ blackStart: match[1], blackEnd: match[2] })
     }
   })
-  await close(process.stderr)
+  await stderrClose
   await fsPromises.writeFile(`${basename}-blackdetect.json`,
     JSON.stringify(blackFrameData))
 }
@@ -298,9 +299,37 @@ const processReplayConfigs = async (files) => {
   await Promise.all(promises)
 }
 
+const getMinimumDuration = async (videoFile) => {
+  const audioArgs = ['-select_streams', 'a:0', '-show_entries',
+    'stream=duration', videoFile]
+  const videoArgs = ['-select_streams', 'v:0', '-show_entries',
+    'stream=duration', videoFile]
+  const audioProcess = spawn('ffprobe', audioArgs)
+  const audioClose = close(audioProcess.stdout)
+  const videoProcess = spawn('ffprobe', videoArgs)
+  const videoClose = close(videoProcess.stdout)
+  audioProcess.stdout.setEncoding('utf8')
+  videoProcess.stdout.setEncoding('utf8')
+  const regex = /duration=([0-9]*\.[0-9]*)/
+  let audioDuration
+  let videoDuration
+  audioProcess.stdout.on('data', (data) => {
+    const match = regex.exec(data)
+    audioDuration = match[1]
+  })
+  videoProcess.stdout.on('data', (data) => {
+    const match = regex.exec(data)
+    videoDuration = match[1]
+  })
+  await audioClose
+  await videoClose
+  return Math.min(audioDuration, videoDuration)
+}
+
 const concatenateVideos = async (dir) => {
   await fsPromises.readdir(dir)
     .then(async (files) => {
+      // Get sorted list of video files to concatenate
       let replayVideos = files.filter((file) => file.endsWith('trimmed.avi'))
       replayVideos = replayVideos.concat(
         files.filter((file) => file.endsWith('overlaid.avi')))
@@ -311,12 +340,25 @@ const concatenateVideos = async (dir) => {
         const index2 = regex.exec(file2)[1]
         return index1 - index2
       })
+      // Compute correct video durations (minimum of audio and video streams)
+      const durations = {}
+      const promises = []
+      replayVideos.forEach((file) => {
+        const promise = getMinimumDuration(path.join(dir, file))
+          .then((duration) => { durations[file] = duration })
+        promises.push(promise)
+      })
+      await Promise.all(promises)
+      // Generate ffmpeg input file
       const concatFn = path.join(dir, 'concat.txt')
       const stream = fs.createWriteStream(concatFn)
       replayVideos.forEach((file) => {
         stream.write(`file '${path.join(dir, file)}'\n`)
+        stream.write('inpoint 0.0\n')
+        stream.write(`outpoint ${durations[file]}\n`)
       })
       stream.end()
+      // Concatenate
       await fsPromises.readFile(path.join(dir, 'outputPath.txt'),
         { encoding: 'utf8' })
         .then(async (outputPath) => {
