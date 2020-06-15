@@ -204,7 +204,7 @@ const processReplayConfigs = async (files) => {
           '-i', `${basename}.avi`,
           '-i', `${basename}.wav`,
           '-b:v', `${BITRATE_KBPS}k`,
-          '-vf', 'scale=1920:1080',
+          '-vf', `scale=${WIDESCREEN_OFF ? '1280:1056' : '1920:1080'}`,
           `${basename}-merged.avi`
         ])
         ffmpegBlackDetectArgsArray.push([
