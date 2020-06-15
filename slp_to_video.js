@@ -367,7 +367,7 @@ const concatenateVideos = async (dir) => {
             '-i', concatFn,
             '-c', 'copy',
             outputPath]
-          const process = spawn('ffmpeg', args)
+          const process = spawn('ffmpeg', args, { stdio: 'ignore' })
           await exit(process)
         })
     })
