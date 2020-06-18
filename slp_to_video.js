@@ -64,6 +64,11 @@ const argv = module === require.main ? require('yargs')
         describe: 'Turn off widescreen.',
         type: 'boolean'
       })
+      yargs.option('bitrate-kbps', {
+        describe: 'Bitrate in kbps.',
+        default: 15000,
+        type: 'number'
+      })
       yargs.option('tmpdir', {
         describe: 'Temporary directory to use (temporary files may be large).',
         type: 'string'
@@ -79,22 +84,25 @@ let INPUT_FILE = argv ? path.resolve(argv.INPUT_FILE) : null
 let NUM_PROCESSES = argv ? argv.numCpus : null
 let DOLPHIN_PATH = argv ? path.resolve(argv.dolphinPath) : null
 let SSBM_ISO_PATH = argv ? path.resolve(argv.ssbmIsoPath) : null
-let TMPDIR = argv ? path.resolve(argv.tmpdir) 
-  : path.join(os.tmpdir(),`tmp-${crypto.randomBytes(12).toString('hex')}`)
+let TMPDIR = argv ? path.resolve(argv.tmpdir)
+  : path.join(os.tmpdir(), `tmp-${crypto.randomBytes(12).toString('hex')}`)
 let GAME_MUSIC_ON = argv ? argv.gameMusicOn : null
 let HIDE_HUD = argv ? argv.hideHud : null
 let WIDESCREEN_OFF = argv ? argv.widescreenOff : null
-let VERBOSE = argv ? argv.verbose : null
+let BITRATE_KBPS = argv ? argv.bitrateKbps : null
+const VERBOSE = argv ? argv.verbose : null
 let TOTAL_REPLAYS = 0
 let COUNT = 0
-let EVENT_TRACKER = { emit: VERBOSE ? (tag,msg)=>{
-  if( tag === 'primaryEventMsg') console.log(`\n${msg}`)
-  if( tag === 'count' ) {
-    process.stdout.clearLine()
-    process.stdout.cursorTo(0)
-    process.stdout.write(`${COUNT}/${TOTAL_REPLAYS}`)
-  }
-} : () => {}}
+let EVENT_TRACKER = {
+  emit: VERBOSE ? (tag, msg) => {
+    if (tag === 'primaryEventMsg') console.log(`\n${msg}`)
+    if (tag === 'count') {
+      process.stdout.clearLine()
+      process.stdout.cursorTo(0)
+      process.stdout.write(`${COUNT}/${TOTAL_REPLAYS}`)
+    }
+  } : () => {}
+}
 
 const generateReplayConfigs = async (replays, basedir) => {
   const dirname = path.join(basedir,
@@ -147,7 +155,7 @@ const executeCommandsInQueue = async (command, argsArray, numWorkers, options,
         await onSpawn(process, args)
       }
       await exitPromise
-      EVENT_TRACKER.emit('count',COUNT++)
+      EVENT_TRACKER.emit('count', COUNT++)
     }
   }
   const workers = []
@@ -172,6 +180,7 @@ const killDolphinOnEndFrame = (process) => {
 }
 
 const saveBlackFrames = async (process, args) => {
+  const stderrClose = close(process.stderr)
   const basename = path.join(path.dirname(args[1]),
     path.basename(args[1], '.avi'))
   const blackFrameData = []
@@ -183,7 +192,7 @@ const saveBlackFrames = async (process, args) => {
       blackFrameData.push({ blackStart: match[1], blackEnd: match[2] })
     }
   })
-  await close(process.stderr)
+  await stderrClose
   await fsPromises.writeFile(`${basename}-blackdetect.json`,
     JSON.stringify(blackFrameData))
 }
@@ -212,7 +221,8 @@ const processReplayConfigs = async (files) => {
         ffmpegMergeArgsArray.push([
           '-i', `${basename}.avi`,
           '-i', `${basename}.wav`,
-          '-b:v', '15M',
+          '-b:v', `${BITRATE_KBPS}k`,
+          '-vf', `scale=${WIDESCREEN_OFF ? '1280:1056' : '1920:1080'}`,
           `${basename}-merged.avi`
         ])
         ffmpegBlackDetectArgsArray.push([
@@ -225,7 +235,7 @@ const processReplayConfigs = async (files) => {
           ffmpegOverlayArgsArray.push([
             '-i', `${basename}-trimmed.avi`,
             '-i', overlayPath,
-            '-b:v', '15M',
+            '-b:v', `${BITRATE_KBPS}k`,
             '-filter_complex',
             '[0:v][1:v] overlay',
             `${basename}-overlaid.avi`
@@ -238,14 +248,14 @@ const processReplayConfigs = async (files) => {
   await Promise.all(promises)
 
   // Dump frames to video and audio
-  EVENT_TRACKER.emit('primaryEventMsg','Generating videos...')
-  COUNT = 0;
+  EVENT_TRACKER.emit('primaryEventMsg', 'Generating videos...')
+  COUNT = 0
   await executeCommandsInQueue(DOLPHIN_PATH, dolphinArgsArray, NUM_PROCESSES,
     {}, killDolphinOnEndFrame)
 
   // Merge video and audio files
-  EVENT_TRACKER.emit('primaryEventMsg','Merging video and audio...')
-  COUNT = 0;
+  EVENT_TRACKER.emit('primaryEventMsg', 'Merging video and audio...')
+  COUNT = 0
   await executeCommandsInQueue('ffmpeg', ffmpegMergeArgsArray, NUM_PROCESSES,
     { stdio: 'ignore' })
 
@@ -259,8 +269,8 @@ const processReplayConfigs = async (files) => {
   await Promise.all(promises)
 
   // Find black frames
-  EVENT_TRACKER.emit('primaryEventMsg','Detecting black frames...')
-  COUNT = 0;
+  EVENT_TRACKER.emit('primaryEventMsg', 'Detecting black frames...')
+  COUNT = 0
   await executeCommandsInQueue('ffmpeg', ffmpegBlackDetectArgsArray,
     NUM_PROCESSES, {}, saveBlackFrames)
 
@@ -279,7 +289,7 @@ const processReplayConfigs = async (files) => {
         }
         ffmpegTrimArgsArray.push([
           '-i', `${basename}-merged.avi`,
-          '-b:v', '15M',
+          '-b:v', `${BITRATE_KBPS}k`,
           '-filter_complex',
           `[0:v]trim=${trimParameters},setpts=PTS-STARTPTS[v1];` +
           `[0:a]atrim=${trimParameters},asetpts=PTS-STARTPTS[a1]`,
@@ -290,8 +300,8 @@ const processReplayConfigs = async (files) => {
     promises.push(promise)
   })
   await Promise.all(promises)
-  EVENT_TRACKER.emit('primaryEventMsg','Trimming black frames...')
-  COUNT = 0;
+  EVENT_TRACKER.emit('primaryEventMsg', 'Trimming black frames...')
+  COUNT = 0
   await executeCommandsInQueue('ffmpeg', ffmpegTrimArgsArray, NUM_PROCESSES,
     { stdio: 'ignore' })
 
@@ -304,8 +314,10 @@ const processReplayConfigs = async (files) => {
   await Promise.all(promises)
 
   // Add overlay
-  if(ffmpegOverlayArgsArray.length) EVENT_TRACKER.emit('primaryEventMsg','Adding Overlays...')
-  COUNT = 0;
+  if (ffmpegOverlayArgsArray.length) {
+    EVENT_TRACKER.emit('primaryEventMsg', 'Adding Overlays...')
+  }
+  COUNT = 0
   await executeCommandsInQueue('ffmpeg', ffmpegOverlayArgsArray, NUM_PROCESSES,
     { stdio: 'ignore' })
 
@@ -317,20 +329,66 @@ const processReplayConfigs = async (files) => {
   await Promise.all(promises)
 }
 
+const getMinimumDuration = async (videoFile) => {
+  const audioArgs = ['-select_streams', 'a:0', '-show_entries',
+    'stream=duration', videoFile]
+  const videoArgs = ['-select_streams', 'v:0', '-show_entries',
+    'stream=duration', videoFile]
+  const audioProcess = spawn('ffprobe', audioArgs)
+  const audioClose = close(audioProcess.stdout)
+  const videoProcess = spawn('ffprobe', videoArgs)
+  const videoClose = close(videoProcess.stdout)
+  audioProcess.stdout.setEncoding('utf8')
+  videoProcess.stdout.setEncoding('utf8')
+  const regex = /duration=([0-9]*\.[0-9]*)/
+  let audioDuration
+  let videoDuration
+  audioProcess.stdout.on('data', (data) => {
+    const match = regex.exec(data)
+    audioDuration = match[1]
+  })
+  videoProcess.stdout.on('data', (data) => {
+    const match = regex.exec(data)
+    videoDuration = match[1]
+  })
+  await audioClose
+  await videoClose
+  return Math.min(audioDuration, videoDuration)
+}
+
 const concatenateVideos = async (dir) => {
   await fsPromises.readdir(dir)
     .then(async (files) => {
+      // Get sorted list of video files to concatenate
       let replayVideos = files.filter((file) => file.endsWith('trimmed.avi'))
       replayVideos = replayVideos.concat(
         files.filter((file) => file.endsWith('overlaid.avi')))
       if (!replayVideos.length) return
-      replayVideos.sort()
+      const regex = /([0-9]*).*/
+      replayVideos.sort((file1, file2) => {
+        const index1 = regex.exec(file1)[1]
+        const index2 = regex.exec(file2)[1]
+        return index1 - index2
+      })
+      // Compute correct video durations (minimum of audio and video streams)
+      const durations = {}
+      const promises = []
+      replayVideos.forEach((file) => {
+        const promise = getMinimumDuration(path.join(dir, file))
+          .then((duration) => { durations[file] = duration })
+        promises.push(promise)
+      })
+      await Promise.all(promises)
+      // Generate ffmpeg input file
       const concatFn = path.join(dir, 'concat.txt')
       const stream = fs.createWriteStream(concatFn)
       replayVideos.forEach((file) => {
         stream.write(`file '${path.join(dir, file)}'\n`)
+        stream.write('inpoint 0.0\n')
+        stream.write(`outpoint ${durations[file]}\n`)
       })
       stream.end()
+      // Concatenate
       await fsPromises.readFile(path.join(dir, 'outputPath.txt'),
         { encoding: 'utf8' })
         .then(async (outputPath) => {
@@ -339,7 +397,7 @@ const concatenateVideos = async (dir) => {
             '-i', concatFn,
             '-c', 'copy',
             outputPath]
-          const process = spawn('ffmpeg', args)
+          const process = spawn('ffmpeg', args, { stdio: 'ignore' })
           await exit(process)
         })
     })
@@ -395,6 +453,8 @@ const configureDolphin = async () => {
   for await (const line of rl) {
     if (line.startsWith('AspectRatio')) {
       newSettings.push(`AspectRatio = ${aspectRatioSetting}`)
+    } else if (line.startsWith('BitrateKbps')) {
+      newSettings.push(`BitrateKbps = ${BITRATE_KBPS}`)
     } else {
       newSettings.push(line)
     }
@@ -404,7 +464,7 @@ const configureDolphin = async () => {
 }
 
 const main = async (config) => {
-  if(config){
+  if (config) {
     INPUT_FILE = config.INPUT_FILE
     DOLPHIN_PATH = config.DOLPHIN_PATH
     SSBM_ISO_PATH = config.SSBM_ISO_PATH
@@ -414,6 +474,7 @@ const main = async (config) => {
     GAME_MUSIC_ON = config.GAME_MUSIC_ON
     HIDE_HUD = config.HIDE_HUD
     WIDESCREEN_OFF = config.WIDESCREEN_OFF
+    BITRATE_KBPS = config.BITRATE_KBPS
   }
   await configureDolphin()
   process.on('exit', (code) => fs.rmdirSync(TMPDIR, { recursive: true }))
@@ -438,9 +499,9 @@ const main = async (config) => {
     .then(async (subdirs) => {
       const promises = []
       subdirs.forEach((dir) => promises.push(concatenateVideos(dir)))
-      EVENT_TRACKER.emit('primaryEventMsg','Concatenating videos...')
+      EVENT_TRACKER.emit('primaryEventMsg', 'Concatenating videos...')
       await Promise.all(promises)
-      EVENT_TRACKER.emit('primaryEventMsg','Done')
+      EVENT_TRACKER.emit('primaryEventMsg', 'Done')
     })
 }
 
