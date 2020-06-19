@@ -399,6 +399,7 @@ const slpToVideo = async (replayLists, config) => {
       subdirs.forEach((dir) => promises.push(concatenateVideos(dir)))
       await Promise.all(promises)
     })
+    .then(() => fsPromises.rmdir(config.tmpdir, { recursive: true }))
 }
 
 const main = () => {
