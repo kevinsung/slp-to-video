@@ -27,65 +27,6 @@ const path = require('path')
 const readline = require('readline')
 const dir = require('node-dir')
 const { default: SlippiGame } = require('slp-parser-js')
-const argv = require('yargs')
-  .command(
-    '$0 INPUT_FILE',
-    'Convert .slp files to video in AVI format.',
-    (yargs) => {
-      yargs.positional('INPUT_FILE', {
-        describe: ('Describes the input .slp files and output filenames. ' +
-                   'See example_input.json for an example.'),
-        type: 'string'
-      })
-      yargs.option('num-cpus', {
-        describe: 'The number of processes to use.',
-        default: 1,
-        type: 'number'
-      })
-      yargs.option('dolphin-path', {
-        describe: 'Path to the Dolphin executable.',
-        default: path.join('Ishiiruka', 'build', 'Binaries', 'dolphin-emu'),
-        type: 'string'
-      })
-      yargs.option('ssbm-iso-path', {
-        describe: 'Path to the SSBM ISO image.',
-        default: 'SSBM.iso',
-        type: 'string'
-      })
-      yargs.option('game-music-on', {
-        describe: 'Turn game music on.',
-        type: 'boolean'
-      })
-      yargs.option('hide-hud', {
-        describe: 'Hide percentage and stock icons.',
-        type: 'boolean'
-      })
-      yargs.option('widescreen-off', {
-        describe: 'Turn off widescreen.',
-        type: 'boolean'
-      })
-      yargs.option('bitrate-kbps', {
-        describe: 'Bitrate in kbps.',
-        default: 15000,
-        type: 'number'
-      })
-      yargs.option('tmpdir', {
-        describe: 'Temporary directory to use (temporary files may be large).',
-        default: path.join(os.tmpdir(),
-                           `tmp-${crypto.randomBytes(12).toString('hex')}`),
-        type: 'string'
-      })
-    }).argv
-
-const INPUT_FILE = path.resolve(argv.INPUT_FILE)
-const NUM_PROCESSES = argv.numCpus
-const DOLPHIN_PATH = path.resolve(argv.dolphinPath)
-const SSBM_ISO_PATH = path.resolve(argv.ssbmIsoPath)
-const TMPDIR = path.resolve(argv.tmpdir)
-const GAME_MUSIC_ON = argv.gameMusicOn
-const HIDE_HUD = argv.hideHud
-const WIDESCREEN_OFF = argv.widescreenOff
-const BITRATE_KBPS = argv.bitrateKbps
 
 const generateReplayConfigs = async (replays, basedir) => {
   const dirname = path.join(basedir,
@@ -179,7 +120,7 @@ const saveBlackFrames = async (process, args) => {
     JSON.stringify(blackFrameData))
 }
 
-const processReplayConfigs = async (files) => {
+const processReplayConfigs = async (files, config) => {
   const dolphinArgsArray = []
   const ffmpegMergeArgsArray = []
   const ffmpegBlackDetectArgsArray = []
@@ -198,13 +139,13 @@ const processReplayConfigs = async (files) => {
         dolphinArgsArray.push([
           '-i', file,
           '-o', basename,
-          '-b', '-e', SSBM_ISO_PATH
+          '-b', '-e', config.ssbmIsoPath
         ])
         ffmpegMergeArgsArray.push([
           '-i', `${basename}.avi`,
           '-i', `${basename}.wav`,
-          '-b:v', `${BITRATE_KBPS}k`,
-          '-vf', `scale=${WIDESCREEN_OFF ? '1280:1056' : '1920:1080'}`,
+          '-b:v', `${config.bitrateKbps}k`,
+          '-vf', `scale=${config.widescreenOff ? '1280:1056' : '1920:1080'}`,
           `${basename}-merged.avi`
         ])
         ffmpegBlackDetectArgsArray.push([
@@ -217,7 +158,7 @@ const processReplayConfigs = async (files) => {
           ffmpegOverlayArgsArray.push([
             '-i', `${basename}-trimmed.avi`,
             '-i', overlayPath,
-            '-b:v', `${BITRATE_KBPS}k`,
+            '-b:v', `${config.bitrateKbps}k`,
             '-filter_complex',
             '[0:v][1:v] overlay',
             `${basename}-overlaid.avi`
@@ -230,11 +171,13 @@ const processReplayConfigs = async (files) => {
   await Promise.all(promises)
 
   // Dump frames to video and audio
-  await executeCommandsInQueue(DOLPHIN_PATH, dolphinArgsArray, NUM_PROCESSES,
+  await executeCommandsInQueue(config.dolphinPath, dolphinArgsArray,
+    config.numProcesses,
     {}, killDolphinOnEndFrame)
 
   // Merge video and audio files
-  await executeCommandsInQueue('ffmpeg', ffmpegMergeArgsArray, NUM_PROCESSES,
+  await executeCommandsInQueue('ffmpeg', ffmpegMergeArgsArray,
+    config.numProcesses,
     { stdio: 'ignore' })
 
   // Delete unmerged video and audio files to save space
@@ -248,7 +191,7 @@ const processReplayConfigs = async (files) => {
 
   // Find black frames
   await executeCommandsInQueue('ffmpeg', ffmpegBlackDetectArgsArray,
-    NUM_PROCESSES, {}, saveBlackFrames)
+    config.numProcesses, {}, saveBlackFrames)
 
   // Trim black frames
   promises = []
@@ -265,7 +208,7 @@ const processReplayConfigs = async (files) => {
         }
         ffmpegTrimArgsArray.push([
           '-i', `${basename}-merged.avi`,
-          '-b:v', `${BITRATE_KBPS}k`,
+          '-b:v', `${config.bitrateKbps}k`,
           '-filter_complex',
           `[0:v]trim=${trimParameters},setpts=PTS-STARTPTS[v1];` +
           `[0:a]atrim=${trimParameters},asetpts=PTS-STARTPTS[a1]`,
@@ -276,8 +219,8 @@ const processReplayConfigs = async (files) => {
     promises.push(promise)
   })
   await Promise.all(promises)
-  await executeCommandsInQueue('ffmpeg', ffmpegTrimArgsArray, NUM_PROCESSES,
-    { stdio: 'ignore' })
+  await executeCommandsInQueue('ffmpeg', ffmpegTrimArgsArray,
+    config.numProcesses, { stdio: 'ignore' })
 
   // Delete untrimmed video files to save space
   promises = []
@@ -288,8 +231,8 @@ const processReplayConfigs = async (files) => {
   await Promise.all(promises)
 
   // Add overlay
-  await executeCommandsInQueue('ffmpeg', ffmpegOverlayArgsArray, NUM_PROCESSES,
-    { stdio: 'ignore' })
+  await executeCommandsInQueue('ffmpeg', ffmpegOverlayArgsArray,
+    config.numProcesses, { stdio: 'ignore' })
 
   // Delete non-overlaid video files
   promises = []
@@ -387,8 +330,8 @@ const subdirs = (rootdir) => new Promise((resolve, reject) => {
   })
 })
 
-const configureDolphin = async () => {
-  const dolphinDirname = path.dirname(DOLPHIN_PATH)
+const configureDolphin = async (config) => {
+  const dolphinDirname = path.dirname(config.dolphinPath)
   const gameSettingsFilename = path.join(dolphinDirname, 'User', 'GameSettings',
     'GALE01.ini')
   const graphicsSettingsFilename = path.join(dolphinDirname, 'User', 'Config',
@@ -407,10 +350,10 @@ const configureDolphin = async () => {
       newSettings.push(line)
     }
   }
-  const gameMusicSetting = GAME_MUSIC_ON ? 'ON' : 'OFF'
+  const gameMusicSetting = config.gameMusicOn ? 'ON' : 'OFF'
   newSettings.push(`$Game Music ${gameMusicSetting}`)
-  if (HIDE_HUD) newSettings.push('$Hide HUD')
-  if (!WIDESCREEN_OFF) newSettings.push('$Widescreen 16:9')
+  if (config.hideHud) newSettings.push('$Hide HUD')
+  if (!config.widescreenOff) newSettings.push('$Widescreen 16:9')
   await fsPromises.writeFile(gameSettingsFilename, newSettings.join('\n'))
 
   // Graphics settings
@@ -419,12 +362,12 @@ const configureDolphin = async () => {
     crlfDelay: Infinity
   })
   newSettings = []
-  const aspectRatioSetting = WIDESCREEN_OFF ? 5 : 6
+  const aspectRatioSetting = config.widescreenOff ? 5 : 6
   for await (const line of rl) {
     if (line.startsWith('AspectRatio')) {
       newSettings.push(`AspectRatio = ${aspectRatioSetting}`)
     } else if (line.startsWith('BitrateKbps')) {
-      newSettings.push(`BitrateKbps = ${BITRATE_KBPS}`)
+      newSettings.push(`BitrateKbps = ${config.bitrateKbps}`)
     } else {
       newSettings.push(line)
     }
@@ -433,29 +376,95 @@ const configureDolphin = async () => {
     newSettings.join('\n'))
 }
 
-const main = async () => {
-  await configureDolphin()
-  process.on('exit', (code) => fs.rmdirSync(TMPDIR, { recursive: true }))
-  fsPromises.mkdir(TMPDIR)
-    .then(() => fsPromises.readFile(INPUT_FILE))
-    .then(async (contents) => {
+const slpToVideo = async (replayLists, config) => {
+  await configureDolphin(config)
+  process.on('exit', (code) => fs.rmdirSync(config.tmpdir, { recursive: true }))
+  fsPromises.mkdir(config.tmpdir)
+    .then(async () => {
       const promises = []
-      JSON.parse(contents).forEach(
-        (replays) => promises.push(generateReplayConfigs(replays, TMPDIR))
+      replayLists.forEach(
+        (replays) => promises.push(
+          generateReplayConfigs(replays, config.tmpdir))
       )
       await Promise.all(promises)
     })
-    .then(() => files(TMPDIR))
+    .then(() => files(config.tmpdir))
     .then(async (files) => {
       files = files.filter((file) => path.extname(file) === '.json')
-      await processReplayConfigs(files)
+      await processReplayConfigs(files, config)
     })
-    .then(() => subdirs(TMPDIR))
+    .then(() => subdirs(config.tmpdir))
     .then(async (subdirs) => {
       const promises = []
       subdirs.forEach((dir) => promises.push(concatenateVideos(dir)))
       await Promise.all(promises)
     })
+}
+
+const main = () => {
+  const argv = require('yargs')
+    .command(
+      '$0 INPUT_FILE',
+      'Convert .slp files to video in AVI format.',
+      (yargs) => {
+        yargs.positional('INPUT_FILE', {
+          describe: ('Describes the input .slp files and output filenames. ' +
+                     'See example_input.json for an example.'),
+          type: 'string'
+        })
+        yargs.option('num-cpus', {
+          describe: 'The number of processes to use.',
+          default: 1,
+          type: 'number'
+        })
+        yargs.option('dolphin-path', {
+          describe: 'Path to the Dolphin executable.',
+          default: path.join('Ishiiruka', 'build', 'Binaries', 'dolphin-emu'),
+          type: 'string'
+        })
+        yargs.option('ssbm-iso-path', {
+          describe: 'Path to the SSBM ISO image.',
+          default: 'SSBM.iso',
+          type: 'string'
+        })
+        yargs.option('game-music-on', {
+          describe: 'Turn game music on.',
+          type: 'boolean'
+        })
+        yargs.option('hide-hud', {
+          describe: 'Hide percentage and stock icons.',
+          type: 'boolean'
+        })
+        yargs.option('widescreen-off', {
+          describe: 'Turn off widescreen.',
+          type: 'boolean'
+        })
+        yargs.option('bitrate-kbps', {
+          describe: 'Bitrate in kbps.',
+          default: 15000,
+          type: 'number'
+        })
+        yargs.option('tmpdir', {
+          describe:
+            'Temporary directory to use (temporary files may be large).',
+          default: path.join(os.tmpdir(),
+                             `tmp-${crypto.randomBytes(12).toString('hex')}`),
+          type: 'string'
+        })
+      }).argv
+  const config = {
+    numProcesses: argv.numCpus,
+    dolphinPath: path.resolve(argv.dolphinPath),
+    ssbmIsoPath: path.resolve(argv.ssbmIsoPath),
+    tmpdir: path.resolve(argv.tmpdir),
+    gameMusicOn: argv.gameMusicOn,
+    hideHud: argv.hideHud,
+    widescreenOff: argv.widescreenOff,
+    bitrateKbps: argv.bitrateKbps
+  }
+  fsPromises.readFile(path.resolve(argv.INPUT_FILE))
+    .then((contents) => JSON.parse(contents))
+    .then((replayLists) => slpToVideo(replayLists, config))
 }
 
 if (module === require.main) {
