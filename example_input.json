@@ -1,13 +1,9 @@
 [
     {"outputPath": "set1.avi",
      "replays": [
-        {"replay": "game1.slp",
-         "startFrame": null,
-         "endFrame": null,
-         "overlayPath": "set1overlay.png"
+        {"replay": "game1.slp"
         },
-        {"replay": "game2.slp",
-         "overlayPath": "set1overlay.png"
+        {"replay": "game2.slp"
         }
      ]
     },
@@ -15,7 +11,8 @@
      "replays": [
         {"replay": "clip1.slp",
          "startFrame": 0,
-         "endFrame": 60 
+         "endFrame": 60,
+         "overlayPath": "clip1overlay.png"
         },
         {"replay": "clip2.slp",
          "startFrame": 100,
