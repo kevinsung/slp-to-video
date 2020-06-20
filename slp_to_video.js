@@ -413,9 +413,31 @@ const configureDolphin = async (config) => {
 }
 
 const slpToVideo = async (replayLists, config) => {
-  await configureDolphin(config)
   process.on('exit', (code) => fs.rmdirSync(config.tmpdir, { recursive: true }))
-  fsPromises.mkdir(config.tmpdir)
+  await fsPromises.access(config.ssbmIsoPath)
+    .catch((err) => {
+      if (err.code === 'ENOENT') {
+        throw new Error(
+          `Could not read SSBM iso from path ${config.ssbmIsoPath}. ` +
+          'Did you forget to specify the --ssbm-iso-path option?'
+        )
+      } else {
+        throw err
+      }
+    })
+    .then(() => fsPromises.access(config.dolphinPath))
+    .catch((err) => {
+      if (err.code === 'ENOENT') {
+        throw new Error(
+          `Could not open Dolphin from path ${config.dolphinPath}. ` +
+          'Did you forget to specify the --dolphin-path option?'
+        )
+      } else {
+        throw err
+      }
+    })
+    .then(() => configureDolphin(config))
+    .then(() => fsPromises.mkdir(config.tmpdir))
     .then(async () => {
       const promises = []
       replayLists.forEach(
@@ -437,6 +459,9 @@ const slpToVideo = async (replayLists, config) => {
       console.log('Done.')
     })
     .then(() => fsPromises.rmdir(config.tmpdir, { recursive: true }))
+    .catch((err) => {
+      console.error(err)
+    })
 }
 
 const main = () => {
