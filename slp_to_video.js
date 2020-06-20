@@ -482,7 +482,7 @@ const main = () => {
           type: 'number'
         })
         yargs.option('resolution', {
-          describe: 'Resolution',
+          describe: 'Internal resolution multiplier.',
           default: '2x',
           type: 'string'
         })
