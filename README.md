@@ -7,6 +7,12 @@ Useful for creating combo videos or converting sets to video.
 See [here](https://github.com/kevinsung/slp-to-video/blob/master/example_input.json)
 for an example of the input file format.
 
+## Requirements
+
+- Node.js >= 12
+- npm
+- ffmpeg
+
 ## Setup (GNU/Linux)
 
 1. Install Dolphin build dependencies. See
@@ -14,11 +20,16 @@ for an example of the input file format.
 or [here](https://github.com/project-slippi/Slippi-FM-installer)
 for instructions.
 
-2. Clone this repository and install our special version of Dolphin.
+2. Clone this repository and build our special version of Dolphin.
 ```
 git clone https://github.com/kevinsung/slp-to-video.git
 cd slp-to-video
 ./build-dolphin.sh
+```
+
+3. Install node dependencies.
+```
+npm i
 ```
 
 ## Usage
@@ -46,3 +57,8 @@ Options:
   --tmpdir          Temporary directory to use (temporary files may be large).
                          [string] [default: "/tmp/tmp-648638048a6c4e1c6476a623"]
 ```
+
+## Notes
+- The default setting for the `--resolution` option is '2x'. When widescreen is
+enabled (the default), this corresponds to an internal resolution of 1878x1056.
+For this case, we automatically upscale the video resolution to 1920x1080.
