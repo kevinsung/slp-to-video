@@ -28,6 +28,15 @@ const readline = require('readline')
 const dir = require('node-dir')
 const { default: SlippiGame } = require('slp-parser-js')
 
+const EFB_SCALE = {
+  '1x': 2,
+  '2x': 4,
+  '3x': 6,
+  '4x': 7,
+  '5x': 8,
+  '6x': 9
+}
+
 const generateReplayConfigs = async (replays, basedir) => {
   const dirname = path.join(basedir,
                             `tmp-${crypto.randomBytes(12).toString('hex')}`)
@@ -146,24 +155,33 @@ const processReplayConfigs = async (files, config) => {
         const overlayPath = JSON.parse(contents).overlayPath
         const basename = path.join(path.dirname(file),
           path.basename(file, '.json'))
+        // Arguments to Dolphin
         dolphinArgsArray.push([
           '-i', file,
           '-o', basename,
           '-b', '-e', config.ssbmIsoPath
         ])
-        ffmpegMergeArgsArray.push([
+        // Arguments for ffmpeg merging
+        const ffmpegMergeArgs = [
           '-i', `${basename}.avi`,
           '-i', `${basename}.wav`,
-          '-b:v', `${config.bitrateKbps}k`,
-          '-vf', `scale=${config.widescreenOff ? '1280:1056' : '1920:1080'}`,
-          `${basename}-merged.avi`
-        ])
+          '-b:v', `${config.bitrateKbps}k`
+        ]
+        if (config.resolution === '2x' && !config.widescreenOff) {
+          // Slightly upscale to 1920x1080
+          ffmpegMergeArgs.push('-vf')
+          ffmpegMergeArgs.push('scale=1920:1080')
+        }
+        ffmpegMergeArgs.push(`${basename}-merged.avi`)
+        ffmpegMergeArgsArray.push(ffmpegMergeArgs)
+        // Arguments for ffmpeg black frame detection
         ffmpegBlackDetectArgsArray.push([
           '-i', `${basename}-merged.avi`,
           '-vf', 'blackdetect=d=0.01:pix_th=0.01',
           '-max_muxing_queue_size', '9999',
           '-f', 'null', '-'
         ])
+        // Arguments for adding overlays
         if (overlayPath) {
           ffmpegOverlayArgsArray.push([
             '-i', `${basename}-trimmed.avi`,
@@ -383,6 +401,8 @@ const configureDolphin = async (config) => {
       newSettings.push(`AspectRatio = ${aspectRatioSetting}`)
     } else if (line.startsWith('BitrateKbps')) {
       newSettings.push(`BitrateKbps = ${config.bitrateKbps}`)
+    } else if (line.startsWith('EFBScale')) {
+      newSettings.push(`EFBScale = ${EFB_SCALE[config.resolution]}`)
     } else {
       newSettings.push(line)
     }
@@ -461,6 +481,11 @@ const main = () => {
           default: 15000,
           type: 'number'
         })
+        yargs.option('resolution', {
+          describe: 'Resolution',
+          default: '2x',
+          type: 'string'
+        })
         yargs.option('tmpdir', {
           describe:
             'Temporary directory to use (temporary files may be large).',
@@ -477,7 +502,8 @@ const main = () => {
     gameMusicOn: argv.gameMusicOn,
     hideHud: argv.hideHud,
     widescreenOff: argv.widescreenOff,
-    bitrateKbps: argv.bitrateKbps
+    bitrateKbps: argv.bitrateKbps,
+    resolution: argv.resolution
   }
   fsPromises.readFile(path.resolve(argv.INPUT_FILE))
     .then((contents) => JSON.parse(contents))
