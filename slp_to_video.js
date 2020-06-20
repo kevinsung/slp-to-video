@@ -70,15 +70,24 @@ const close = (stream) => new Promise((resolve, reject) => {
 
 const executeCommandsInQueue = async (command, argsArray, numWorkers, options,
   onSpawn) => {
+  const numTasks = argsArray.length
+  let count = 0
+  if (process.stdout.isTTY) process.stdout.write(`${count}/${numTasks}`)
   const worker = async () => {
     let args
     while ((args = argsArray.pop()) !== undefined) {
-      const process = spawn(command, args, options)
-      const exitPromise = exit(process)
+      const process_ = spawn(command, args, options)
+      const exitPromise = exit(process_)
       if (onSpawn) {
-        await onSpawn(process, args)
+        await onSpawn(process_, args)
       }
       await exitPromise
+      count++
+      if (process.stdout.isTTY) {
+        process.stdout.clearLine()
+        process.stdout.cursorTo(0)
+        process.stdout.write(`${count}/${numTasks}`)
+      }
     }
   }
   const workers = []
@@ -88,6 +97,7 @@ const executeCommandsInQueue = async (command, argsArray, numWorkers, options,
   while (workers.length > 0) {
     await workers.pop()
   }
+  if (process.stdout.isTTY) process.stdout.write('\n')
 }
 
 const killDolphinOnEndFrame = (process) => {
@@ -171,11 +181,13 @@ const processReplayConfigs = async (files, config) => {
   await Promise.all(promises)
 
   // Dump frames to video and audio
+  console.log('Dumping video frames and audio...')
   await executeCommandsInQueue(config.dolphinPath, dolphinArgsArray,
     config.numProcesses,
     {}, killDolphinOnEndFrame)
 
   // Merge video and audio files
+  console.log('Merging video and audio...')
   await executeCommandsInQueue('ffmpeg', ffmpegMergeArgsArray,
     config.numProcesses,
     { stdio: 'ignore' })
@@ -190,10 +202,12 @@ const processReplayConfigs = async (files, config) => {
   await Promise.all(promises)
 
   // Find black frames
+  console.log('Detecting black frames...')
   await executeCommandsInQueue('ffmpeg', ffmpegBlackDetectArgsArray,
     config.numProcesses, {}, saveBlackFrames)
 
   // Trim black frames
+  console.log('Trimming black frames...')
   promises = []
   files.forEach((file) => {
     const basename = path.join(path.dirname(file), path.basename(file, '.json'))
@@ -231,6 +245,7 @@ const processReplayConfigs = async (files, config) => {
   await Promise.all(promises)
 
   // Add overlay
+  console.log('Adding overlays...')
   await executeCommandsInQueue('ffmpeg', ffmpegOverlayArgsArray,
     config.numProcesses, { stdio: 'ignore' })
 
@@ -396,6 +411,7 @@ const slpToVideo = async (replayLists, config) => {
     .then(() => subdirs(config.tmpdir))
     .then(async (subdirs) => {
       const promises = []
+      console.log('Concatenating videos...')
       subdirs.forEach((dir) => promises.push(concatenateVideos(dir)))
       await Promise.all(promises)
     })
