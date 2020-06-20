@@ -303,6 +303,7 @@ const getMinimumDuration = async (videoFile) => {
 }
 
 const concatenateVideos = async (dir) => {
+  console.log('Concatenating videos...')
   await fsPromises.readdir(dir)
     .then(async (files) => {
       // Get sorted list of video files to concatenate
@@ -431,9 +432,9 @@ const slpToVideo = async (replayLists, config) => {
     .then(() => subdirs(config.tmpdir))
     .then(async (subdirs) => {
       const promises = []
-      console.log('Concatenating videos...')
       subdirs.forEach((dir) => promises.push(concatenateVideos(dir)))
       await Promise.all(promises)
+      console.log('Done.')
     })
     .then(() => fsPromises.rmdir(config.tmpdir, { recursive: true }))
 }
