@@ -449,7 +449,7 @@ const main = () => {
                      'See example_input.json for an example.'),
           type: 'string'
         })
-        yargs.option('num-cpus', {
+        yargs.option('num-processes', {
           describe: 'The number of processes to use.',
           default: 1,
           type: 'number'
@@ -495,7 +495,7 @@ const main = () => {
         })
       }).argv
   const config = {
-    numProcesses: argv.numCpus,
+    numProcesses: argv.numProcesses,
     dolphinPath: path.resolve(argv.dolphinPath),
     ssbmIsoPath: path.resolve(argv.ssbmIsoPath),
     tmpdir: path.resolve(argv.tmpdir),
