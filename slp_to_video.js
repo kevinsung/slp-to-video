@@ -471,3 +471,5 @@ const main = () => {
 if (module === require.main) {
   main()
 }
+
+module.exports = slpToVideo
