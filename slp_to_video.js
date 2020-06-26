@@ -302,7 +302,7 @@ const getMinimumDuration = async (videoFile) => {
   return Math.min(audioDuration, videoDuration)
 }
 
-const concatenateVideos = async (dir) => {
+const concatenateVideos = async (dir, config) => {
   console.log('Concatenating videos...')
   await fsPromises.readdir(dir)
     .then(async (files) => {
@@ -340,9 +340,13 @@ const concatenateVideos = async (dir) => {
         { encoding: 'utf8' })
         .then(async (outputPath) => {
           const args = ['-y',
-            '-f', 'concat', '-safe', '0',
+            '-f', 'concat',
+            '-safe', '0',
+            '-segment_time_metadata', '1',
             '-i', concatFn,
-            '-c', 'copy',
+            '-vf', 'select=concatdec_select',
+            '-af', 'aselect=concatdec_select,aresample=async=1',
+            '-b:v', `${config.bitrateKbps}k`,
             outputPath]
           const process = spawn('ffmpeg', args, { stdio: 'ignore' })
           await exit(process)
@@ -454,7 +458,7 @@ const slpToVideo = async (replayLists, config) => {
     .then(() => subdirs(config.tmpdir))
     .then(async (subdirs) => {
       const promises = []
-      subdirs.forEach((dir) => promises.push(concatenateVideos(dir)))
+      subdirs.forEach((dir) => promises.push(concatenateVideos(dir, config)))
       await Promise.all(promises)
       console.log('Done.')
     })
