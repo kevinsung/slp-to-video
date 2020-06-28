@@ -409,13 +409,20 @@ const configureDolphin = async (config) => {
   for await (const line of rl) {
     if (!(line.startsWith('$Game Music') ||
           line.startsWith('$Hide HUD') ||
-          line.startsWith('$Widescreen'))) {
+          line.startsWith('$Hide Tags') ||
+          line.startsWith('$Prevent Character Crowd Chants') ||
+          line.startsWith('$Fixed Camera Always') ||
+          line.startsWith('$Widescreen')
+    )) {
       newSettings.push(line)
     }
   }
   const gameMusicSetting = config.gameMusicOn ? 'ON' : 'OFF'
   newSettings.push(`$Game Music ${gameMusicSetting}`)
   if (config.hideHud) newSettings.push('$Hide HUD')
+  if (config.hideTags) newSettings.push('$Hide Tags')
+  if (config.disableChants) newSettings.push('$Prevent Character Crowd Chants')
+  if (config.fixedCamera) newSettings.push('$Fixed Camera Always')
   if (!config.widescreenOff) newSettings.push('$Widescreen 16:9')
   await fsPromises.writeFile(gameSettingsFilename, newSettings.join('\n'))
 
@@ -527,6 +534,18 @@ const main = () => {
           describe: 'Hide percentage and stock icons.',
           type: 'boolean'
         })
+        yargs.option('hide-tags', {
+          describe: 'Always hide tags.',
+          type: 'boolean'
+        })
+        yargs.option('disable-chants', {
+          describe: 'Disable character crowd chants.',
+          type: 'boolean'
+        })
+        yargs.option('fixed-camera', {
+          describe: 'Fixed camera mode.',
+          type: 'boolean'
+        })
         yargs.option('widescreen-off', {
           describe: 'Turn off widescreen.',
           type: 'boolean'
@@ -556,6 +575,9 @@ const main = () => {
     tmpdir: path.resolve(argv.tmpdir),
     gameMusicOn: argv.gameMusicOn,
     hideHud: argv.hideHud,
+    hideTags: argv.hideTags,
+    disableChants: argv.disableChants,
+    fixedCamera: argv.fixedCamera,
     widescreenOff: argv.widescreenOff,
     bitrateKbps: argv.bitrateKbps,
     resolution: argv.resolution
