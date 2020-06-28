@@ -77,6 +77,32 @@ const close = (stream) => new Promise((resolve, reject) => {
   })
 })
 
+const executeFunctionInQueue = async (func, argsArray, numWorkers) => {
+  const numTasks = argsArray.length
+  let count = 0
+  if (process.stdout.isTTY) process.stdout.write(`${count}/${numTasks}`)
+  const worker = async () => {
+    let args
+    while ((args = argsArray.pop()) !== undefined) {
+      await func(args)
+      count++
+      if (process.stdout.isTTY) {
+        process.stdout.clearLine()
+        process.stdout.cursorTo(0)
+        process.stdout.write(`${count}/${numTasks}`)
+      }
+    }
+  }
+  const workers = []
+  while (workers.length < numWorkers) {
+    workers.push(worker())
+  }
+  while (workers.length > 0) {
+    await workers.pop()
+  }
+  if (process.stdout.isTTY) process.stdout.write('\n')
+}
+
 const executeCommandsInQueue = async (command, argsArray, numWorkers, options,
   onSpawn) => {
   const numTasks = argsArray.length
@@ -303,7 +329,6 @@ const getMinimumDuration = async (videoFile) => {
 }
 
 const concatenateVideos = async (dir, config) => {
-  console.log('Concatenating videos...')
   await fsPromises.readdir(dir)
     .then(async (files) => {
       // Get sorted list of video files to concatenate
@@ -457,9 +482,9 @@ const slpToVideo = async (replayLists, config) => {
     })
     .then(() => subdirs(config.tmpdir))
     .then(async (subdirs) => {
-      const promises = []
-      subdirs.forEach((dir) => promises.push(concatenateVideos(dir, config)))
-      await Promise.all(promises)
+      console.log('Concatenating videos...')
+      await executeFunctionInQueue((dir) => concatenateVideos(dir, config),
+        subdirs, config.numProcesses)
       console.log('Done.')
     })
     .then(() => fsPromises.rmdir(config.tmpdir, { recursive: true }))
