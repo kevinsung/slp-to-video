@@ -11,7 +11,7 @@ else
 fi
 pushd build
 cmake -DLINUX_LOCAL_DEV=true ../
-make -j3
+make -j$(nproc)
 popd
 touch build/Binaries/portable.txt
 cp -R Overwrite/* build/Binaries/
