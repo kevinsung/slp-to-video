@@ -65,3 +65,6 @@ Options:
 - The default setting for the `--resolution` option is '2x'. When widescreen is
 enabled (the default), this corresponds to an internal resolution of 1878x1056.
 For this case, we automatically upscale the video resolution to 1920x1080.
+
+## Contact
+Kevin Sung: kevjsung@umich.edu
