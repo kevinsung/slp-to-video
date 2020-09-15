@@ -132,40 +132,25 @@ const executeCommandsInQueue = async (command, argsArray, numWorkers, options,
 }
 
 const killDolphinOnEndFrame = (process) => {
+  let endFrame = '0'
+  const regex = /\[PLAYBACK_END_FRAME\] ([0-9]+)/
   process.stdout.setEncoding('utf8')
   process.stdout.on('data', (data) => {
     const lines = data.split('\r\n')
     lines.forEach((line) => {
-      if (line.includes('[END_FRAME]')) {
+      let match = regex.exec(line)
+      if (match) {
+        endFrame = match[1]
+      } else if (line.trim() === `[CURRENT_FRAME] ${endFrame}`) {
         setTimeout(() => process.kill(), 5000)
       }
     })
   })
 }
 
-const saveBlackFrames = async (process, args) => {
-  const stderrClose = close(process.stderr)
-  const basename = path.join(path.dirname(args[1]),
-    path.basename(args[1], '.avi'))
-  const blackFrameData = []
-  process.stderr.setEncoding('utf8')
-  process.stderr.on('data', (data) => {
-    const regex = /black_start:(.+) black_end:(.+) /g
-    let match
-    while ((match = regex.exec(data)) != null) {
-      blackFrameData.push({ blackStart: match[1], blackEnd: match[2] })
-    }
-  })
-  await stderrClose
-  await fsPromises.writeFile(`${basename}-blackdetect.json`,
-    JSON.stringify(blackFrameData))
-}
-
 const processReplayConfigs = async (files, config) => {
   const dolphinArgsArray = []
   const ffmpegMergeArgsArray = []
-  const ffmpegBlackDetectArgsArray = []
-  const ffmpegTrimArgsArray = []
   const ffmpegOverlayArgsArray = []
   const replaysWithOverlays = []
   let promises = []
@@ -179,8 +164,10 @@ const processReplayConfigs = async (files, config) => {
           path.basename(file, '.json'))
         // Arguments to Dolphin
         dolphinArgsArray.push([
+          '-co',
           '-i', file,
-          '-o', basename,
+          '-od', path.dirname(basename),
+          '-o', path.basename(basename),
           '-b', '-e', config.ssbmIsoPath
         ])
         // Arguments for ffmpeg merging
@@ -196,17 +183,10 @@ const processReplayConfigs = async (files, config) => {
         }
         ffmpegMergeArgs.push(`${basename}-merged.avi`)
         ffmpegMergeArgsArray.push(ffmpegMergeArgs)
-        // Arguments for ffmpeg black frame detection
-        ffmpegBlackDetectArgsArray.push([
-          '-i', `${basename}-merged.avi`,
-          '-vf', 'blackdetect=d=0.01:pix_th=0.01',
-          '-max_muxing_queue_size', '9999',
-          '-f', 'null', '-'
-        ])
         // Arguments for adding overlays
         if (overlayPath) {
           ffmpegOverlayArgsArray.push([
-            '-i', `${basename}-trimmed.avi`,
+            '-i', `${basename}-merged.avi`,
             '-i', overlayPath,
             '-b:v', `${config.bitrateKbps}k`,
             '-filter_complex',
@@ -241,49 +221,6 @@ const processReplayConfigs = async (files, config) => {
   })
   await Promise.all(promises)
 
-  // Find black frames
-  console.log('Detecting black frames...')
-  await executeCommandsInQueue('ffmpeg', ffmpegBlackDetectArgsArray,
-    config.numProcesses, {}, saveBlackFrames)
-
-  // Trim black frames
-  console.log('Trimming black frames...')
-  promises = []
-  files.forEach((file) => {
-    const basename = path.join(path.dirname(file), path.basename(file, '.json'))
-    const promise = fsPromises.readFile(`${basename}-merged-blackdetect.json`,
-      { encoding: 'utf8' })
-      .then((contents) => {
-        const blackFrames = JSON.parse(contents)
-        let trimParameters = `start=${blackFrames[0].blackEnd}`
-        if (blackFrames.length > 1) {
-          trimParameters = trimParameters.concat(
-            `:end=${blackFrames[1].blackStart}`)
-        }
-        ffmpegTrimArgsArray.push([
-          '-i', `${basename}-merged.avi`,
-          '-b:v', `${config.bitrateKbps}k`,
-          '-filter_complex',
-          `[0:v]trim=${trimParameters},setpts=PTS-STARTPTS[v1];` +
-          `[0:a]atrim=${trimParameters},asetpts=PTS-STARTPTS[a1]`,
-          '-map', '[v1]', '-map', '[a1]',
-          `${basename}-trimmed.avi`
-        ])
-      })
-    promises.push(promise)
-  })
-  await Promise.all(promises)
-  await executeCommandsInQueue('ffmpeg', ffmpegTrimArgsArray,
-    config.numProcesses, { stdio: 'ignore' })
-
-  // Delete untrimmed video files to save space
-  promises = []
-  files.forEach((file) => {
-    const basename = path.join(path.dirname(file), path.basename(file, '.json'))
-    promises.push(fsPromises.unlink(`${basename}-merged.avi`))
-  })
-  await Promise.all(promises)
-
   // Add overlay
   console.log('Adding overlays...')
   await executeCommandsInQueue('ffmpeg', ffmpegOverlayArgsArray,
@@ -292,7 +229,7 @@ const processReplayConfigs = async (files, config) => {
   // Delete non-overlaid video files
   promises = []
   replaysWithOverlays.forEach((basename) => {
-    promises.push(fsPromises.unlink(`${basename}-trimmed.avi`))
+    promises.push(fsPromises.unlink(`${basename}-merged.avi`))
   })
   await Promise.all(promises)
 }
@@ -328,7 +265,7 @@ const concatenateVideos = async (dir, config) => {
   await fsPromises.readdir(dir)
     .then(async (files) => {
       // Get sorted list of video files to concatenate
-      let replayVideos = files.filter((file) => file.endsWith('trimmed.avi'))
+      let replayVideos = files.filter((file) => file.endsWith('merged.avi'))
       replayVideos = replayVideos.concat(
         files.filter((file) => file.endsWith('overlaid.avi')))
       if (!replayVideos.length) return
@@ -403,23 +340,24 @@ const configureDolphin = async (config) => {
   })
   let newSettings = []
   for await (const line of rl) {
-    if (!(line.startsWith('$Game Music') ||
-          line.startsWith('$Hide HUD') ||
-          line.startsWith('$Hide Tags') ||
-          line.startsWith('$Prevent Character Crowd Chants') ||
-          line.startsWith('$Fixed Camera Always') ||
-          line.startsWith('$Widescreen')
+    if (!(line.includes('Game Music') ||
+          line.includes('Hide HUD') ||
+          line.includes('Hide Tags') ||
+          line.includes('Prevent Character Crowd Chants') ||
+          line.includes('Disable Screen Shake') ||
+          line.includes('Fixed Camera Always') ||
+          line.includes('Widescreen')
     )) {
       newSettings.push(line)
     }
   }
-  const gameMusicSetting = config.gameMusicOn ? 'ON' : 'OFF'
-  newSettings.push(`$Game Music ${gameMusicSetting}`)
-  if (config.hideHud) newSettings.push('$Hide HUD')
-  if (config.hideTags) newSettings.push('$Hide Tags')
-  if (config.disableChants) newSettings.push('$Prevent Character Crowd Chants')
-  if (config.fixedCamera) newSettings.push('$Fixed Camera Always')
-  if (!config.widescreenOff) newSettings.push('$Widescreen 16:9')
+  if (!config.gameMusicOn) newSettings.push('$Optional: Game Music OFF')
+  if (config.hideHud) newSettings.push('$Optional: Hide HUD')
+  if (config.hideTags) newSettings.push('$Optional: Hide Tags')
+  if (config.disableChants) newSettings.push('$Optional: Prevent Character Crowd Chants')
+  if (config.disableScreenShake) newSettings.push('$Optional: Disable Screen Shake')
+  if (config.fixedCamera) newSettings.push('$Optional: Fixed Camera Always')
+  if (!config.widescreenOff) newSettings.push('$Optional: Widescreen 16:9')
   await fsPromises.writeFile(gameSettingsFilename, newSettings.join('\n'))
 
   // Graphics settings
@@ -538,6 +476,10 @@ const main = () => {
           describe: 'Disable character crowd chants.',
           type: 'boolean'
         })
+        yargs.option('disable-screen-shake', {
+          describe: 'Disable screen shake.',
+          type: 'boolean'
+        })
         yargs.option('fixed-camera', {
           describe: 'Fixed camera mode.',
           type: 'boolean'
@@ -573,6 +515,7 @@ const main = () => {
     hideHud: argv.hideHud,
     hideTags: argv.hideTags,
     disableChants: argv.disableChants,
+    disableScreenShake: argv.disableScreenShake,
     fixedCamera: argv.fixedCamera,
     widescreenOff: argv.widescreenOff,
     bitrateKbps: argv.bitrateKbps,
