@@ -445,7 +445,6 @@ const configureDolphin = async (config) => {
 }
 
 const slpToVideo = async (replayLists, config) => {
-  process.on('exit', (code) => fs.rmdirSync(config.tmpdir, { recursive: true }))
   await fsPromises.access(config.ssbmIsoPath)
     .catch((err) => {
       if (err.code === 'ENOENT') {
