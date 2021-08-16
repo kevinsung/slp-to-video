@@ -17,3 +17,4 @@ mv Ishiiruka-$VERSION Ishiiruka
 pushd Ishiiruka
 ./build-linux.sh playback
 popd
+cp -r config/* Ishiiruka/build/Binaries/
