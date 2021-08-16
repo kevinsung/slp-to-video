@@ -132,11 +132,16 @@ const executeCommandsInQueue = async (command, argsArray, numWorkers, options,
 }
 
 const killDolphinOnEndFrame = (process) => {
+  let endFrame = Infinity
   process.stdout.setEncoding('utf8')
   process.stdout.on('data', (data) => {
     const lines = data.split('\r\n')
     lines.forEach((line) => {
-      if (line.includes('[END_FRAME]')) {
+      if (line.includes(`[PLAYBACK_END_FRAME]`)) {
+        const regex = /\[PLAYBACK_END_FRAME\] ([0-9]*)/
+        const match = regex.exec(line)
+        endFrame = match[1]
+      } else if (line.includes(`[CURRENT_FRAME] ${endFrame}`)) {
         setTimeout(() => process.kill(), 5000)
       }
     })
@@ -181,7 +186,8 @@ const processReplayConfigs = async (files, config) => {
         dolphinArgsArray.push([
           '-i', file,
           '-o', basename,
-          '-b', '-e', config.ssbmIsoPath
+          '-b', '-e', config.ssbmIsoPath,
+          '--cout'
         ])
         // Arguments for ffmpeg merging
         const ffmpegMergeArgs = [
