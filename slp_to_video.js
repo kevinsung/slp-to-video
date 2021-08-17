@@ -494,7 +494,7 @@ const slpToVideo = async (replayLists, config) => {
       )
       console.log("Done.")
     })
-    .then(() => fsPromises.rmdir(config.tmpdir, { recursive: true }))
+    .then(() => fsPromises.rm(config.tmpdir, { recursive: true }))
     .catch((err) => {
       console.error(err)
     })
