@@ -159,33 +159,9 @@ const killDolphinOnEndFrame = (process) => {
   })
 }
 
-const saveBlackFrames = async (process, args) => {
-  const stderrClose = close(process.stderr)
-  const basename = path.join(
-    path.dirname(args[1]),
-    path.basename(args[1], ".avi")
-  )
-  const blackFrameData = []
-  process.stderr.setEncoding("utf8")
-  process.stderr.on("data", (data) => {
-    const regex = /black_start:(.+) black_end:(.+) /g
-    let match
-    while ((match = regex.exec(data)) != null) {
-      blackFrameData.push({ blackStart: match[1], blackEnd: match[2] })
-    }
-  })
-  await stderrClose
-  await fsPromises.writeFile(
-    `${basename}-blackdetect.json`,
-    JSON.stringify(blackFrameData)
-  )
-}
-
 const processReplayConfigs = async (files, config) => {
   const dolphinArgsArray = []
   const ffmpegMergeArgsArray = []
-  const ffmpegBlackDetectArgsArray = []
-  const ffmpegTrimArgsArray = []
   const ffmpegOverlayArgsArray = []
   const replaysWithOverlays = []
   let promises = []
@@ -224,23 +200,11 @@ const processReplayConfigs = async (files, config) => {
       }
       ffmpegMergeArgs.push(`${basename}-merged.avi`)
       ffmpegMergeArgsArray.push(ffmpegMergeArgs)
-      // Arguments for ffmpeg black frame detection
-      ffmpegBlackDetectArgsArray.push([
-        "-i",
-        `${basename}-merged.avi`,
-        "-vf",
-        "blackdetect=d=0.01:pix_th=0.01",
-        "-max_muxing_queue_size",
-        "9999",
-        "-f",
-        "null",
-        "-",
-      ])
       // Arguments for adding overlays
       if (overlayPath) {
         ffmpegOverlayArgsArray.push([
           "-i",
-          `${basename}-trimmed.avi`,
+          `${basename}-merged.avi`,
           "-i",
           overlayPath,
           "-b:v",
@@ -284,64 +248,6 @@ const processReplayConfigs = async (files, config) => {
   })
   await Promise.all(promises)
 
-  // Find black frames
-  console.log("Detecting black frames...")
-  await executeCommandsInQueue(
-    "ffmpeg",
-    ffmpegBlackDetectArgsArray,
-    config.numProcesses,
-    {},
-    saveBlackFrames
-  )
-
-  // Trim black frames
-  console.log("Trimming black frames...")
-  promises = []
-  files.forEach((file) => {
-    const basename = path.join(path.dirname(file), path.basename(file, ".json"))
-    const promise = fsPromises
-      .readFile(`${basename}-merged-blackdetect.json`, { encoding: "utf8" })
-      .then((contents) => {
-        const blackFrames = JSON.parse(contents)
-        let trimParameters = `start=${blackFrames[0].blackEnd}`
-        if (blackFrames.length > 1) {
-          trimParameters = trimParameters.concat(
-            `:end=${blackFrames[1].blackStart}`
-          )
-        }
-        ffmpegTrimArgsArray.push([
-          "-i",
-          `${basename}-merged.avi`,
-          "-b:v",
-          `${config.bitrateKbps}k`,
-          "-filter_complex",
-          `[0:v]trim=${trimParameters},setpts=PTS-STARTPTS[v1];` +
-            `[0:a]atrim=${trimParameters},asetpts=PTS-STARTPTS[a1]`,
-          "-map",
-          "[v1]",
-          "-map",
-          "[a1]",
-          `${basename}-trimmed.avi`,
-        ])
-      })
-    promises.push(promise)
-  })
-  await Promise.all(promises)
-  await executeCommandsInQueue(
-    "ffmpeg",
-    ffmpegTrimArgsArray,
-    config.numProcesses,
-    { stdio: "ignore" }
-  )
-
-  // Delete untrimmed video files to save space
-  promises = []
-  files.forEach((file) => {
-    const basename = path.join(path.dirname(file), path.basename(file, ".json"))
-    promises.push(fsPromises.unlink(`${basename}-merged.avi`))
-  })
-  await Promise.all(promises)
-
   // Add overlay
   console.log("Adding overlays...")
   await executeCommandsInQueue(
@@ -354,7 +260,7 @@ const processReplayConfigs = async (files, config) => {
   // Delete non-overlaid video files
   promises = []
   replaysWithOverlays.forEach((basename) => {
-    promises.push(fsPromises.unlink(`${basename}-trimmed.avi`))
+    promises.push(fsPromises.unlink(`${basename}-merged.avi`))
   })
   await Promise.all(promises)
 }
@@ -399,7 +305,7 @@ const getMinimumDuration = async (videoFile) => {
 const concatenateVideos = async (dir, config) => {
   await fsPromises.readdir(dir).then(async (files) => {
     // Get sorted list of video files to concatenate
-    let replayVideos = files.filter((file) => file.endsWith("trimmed.avi"))
+    let replayVideos = files.filter((file) => file.endsWith("merged.avi"))
     replayVideos = replayVideos.concat(
       files.filter((file) => file.endsWith("overlaid.avi"))
     )
