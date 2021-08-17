@@ -587,7 +587,9 @@ const main = () => {
   fsPromises
     .readFile(path.resolve(argv.INPUT_FILE))
     .then((contents) => JSON.parse(contents))
-    .then((replayLists) => slpToVideo(replayLists, config))
+    .then((replays) =>
+      slpToVideo(Array.isArray(replays) ? replays : [replays], config)
+    )
 }
 
 if (module === require.main) {
