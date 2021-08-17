@@ -44,17 +44,17 @@ const generateReplayConfigs = async (replays, basedir) => {
     replays.outputPath
   )
   await fsPromises.mkdir(dirname, { recursive: true })
-  for (const [index, replay] of replays.replays.entries()) {
+  for (const [index, replay] of replays.queue.entries()) {
     generateReplayConfig(replay, index, dirname)
   }
 }
 
 const generateReplayConfig = async (replay, index, basedir) => {
-  const game = new SlippiGame(replay.replay)
+  const game = new SlippiGame(replay.path)
   const metadata = game.getMetadata()
   const config = {
     mode: "normal",
-    replay: replay.replay,
+    replay: replay.path,
     startFrame: replay.startFrame != null ? replay.startFrame : -123,
     endFrame: replay.endFrame != null ? replay.endFrame : metadata.lastFrame,
     isRealTimeMode: false,
