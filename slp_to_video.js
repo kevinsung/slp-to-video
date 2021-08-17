@@ -405,24 +405,24 @@ const configureDolphin = async (config) => {
   for await (const line of rl) {
     if (
       !(
-        line.startsWith("$Game Music") ||
-        line.startsWith("$Hide HUD") ||
-        line.startsWith("$Hide Tags") ||
-        line.startsWith("$Prevent Character Crowd Chants") ||
-        line.startsWith("$Fixed Camera Always") ||
-        line.startsWith("$Widescreen")
+        line.startsWith("$Optional: Game Music") ||
+        line.startsWith("$Optional: Hide HUD") ||
+        line.startsWith("$Optional: Hide Tags") ||
+        line.startsWith("$Optional: Prevent Character Crowd Chants") ||
+        line.startsWith("$Optional: Fixed Camera Always") ||
+        line.startsWith("$Optional: Widescreen")
       )
     ) {
       newSettings.push(line)
     }
   }
-  const gameMusicSetting = config.gameMusicOn ? "ON" : "OFF"
-  newSettings.push(`$Game Music ${gameMusicSetting}`)
-  if (config.hideHud) newSettings.push("$Hide HUD")
-  if (config.hideTags) newSettings.push("$Hide Tags")
-  if (config.disableChants) newSettings.push("$Prevent Character Crowd Chants")
-  if (config.fixedCamera) newSettings.push("$Fixed Camera Always")
-  if (!config.widescreenOff) newSettings.push("$Widescreen 16:9")
+  if (!config.gameMusicOn) newSettings.push("$Optional: Game Music OFF")
+  if (config.hideHud) newSettings.push("$Optional: Hide HUD")
+  if (config.hideTags) newSettings.push("$Optional: Hide Tags")
+  if (config.disableChants)
+    newSettings.push("$Optional: Prevent Character Crowd Chants")
+  if (config.fixedCamera) newSettings.push("$Optional: Fixed Camera Always")
+  if (!config.widescreenOff) newSettings.push("$Optional: Widescreen 16:9")
   await fsPromises.writeFile(gameSettingsFilename, newSettings.join("\n"))
 
   // Graphics settings
