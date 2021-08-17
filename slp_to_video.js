@@ -153,7 +153,7 @@ const killDolphinOnEndFrame = (process) => {
         const match = regex.exec(line)
         endFrame = match[1]
       } else if (line.includes(`[CURRENT_FRAME] ${endFrame}`)) {
-        setTimeout(() => process.kill(), 5000)
+        process.kill()
       }
     })
   })
