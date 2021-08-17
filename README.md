@@ -1,4 +1,5 @@
 # slp-to-video
+
 Convert Slippi replay files to video.
 
 Takes sequences of Slippi replay files with optional start and end frames and
@@ -16,11 +17,12 @@ for an example of the input file format.
 ## Setup (GNU/Linux)
 
 1. Install Dolphin build dependencies. See
-[here](https://wiki.dolphin-emu.org/index.php?title=Building_Dolphin_on_Linux)
-or [here](https://github.com/project-slippi/Slippi-FM-installer)
-for instructions.
+   [here](https://wiki.dolphin-emu.org/index.php?title=Building_Dolphin_on_Linux)
+   or [here](https://github.com/project-slippi/Slippi-FM-installer)
+   for instructions.
 
-2. Clone this repository and build our special version of Dolphin.
+2. Clone this repository and build Dolphin.
+
 ```
 git clone https://github.com/kevinsung/slp-to-video.git
 cd slp-to-video
@@ -28,11 +30,13 @@ cd slp-to-video
 ```
 
 3. Install node dependencies.
+
 ```
 npm i
 ```
 
 ## Usage
+
 ```
 node slp_to_video.js INPUT_FILE
 
@@ -62,9 +66,11 @@ Options:
 ```
 
 ## Notes
+
 - The default setting for the `--resolution` option is '2x'. When widescreen is
-enabled (the default), this corresponds to an internal resolution of 1878x1056.
-For this case, we automatically upscale the video resolution to 1920x1080.
+  enabled (the default), this corresponds to an internal resolution of 1878x1056.
+  For this case, we automatically upscale the video resolution to 1920x1080.
 
 ## Contact
+
 Kevin Sung: kevjsung@umich.edu
