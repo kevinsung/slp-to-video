@@ -180,12 +180,13 @@ const processReplayConfigs = async (files, config) => {
     const promise = fsPromises.readFile(file)
       .then((contents) => {
         const overlayPath = JSON.parse(contents).overlayPath
-        const basename = path.join(path.dirname(file),
-          path.basename(file, '.json'))
+        const {dir, name} = path.parse(file)
+        const basename = path.join(dir, name)
         // Arguments to Dolphin
         dolphinArgsArray.push([
           '-i', file,
-          '-o', basename,
+          '-o', name,
+          `--output-directory=${dir}`,
           '-b', '-e', config.ssbmIsoPath,
           '--cout'
         ])
