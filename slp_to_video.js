@@ -406,25 +406,8 @@ const configureDolphin = async (config) => {
   )
 
   // Game settings
-  let rl = readline.createInterface({
-    input: fs.createReadStream(gameSettingsFilename),
-    crlfDelay: Infinity,
-  })
-  let newSettings = []
-  for await (const line of rl) {
-    if (
-      !(
-        line.startsWith("$Optional: Game Music") ||
-        line.startsWith("$Optional: Hide HUD") ||
-        line.startsWith("$Optional: Hide Tags") ||
-        line.startsWith("$Optional: Prevent Character Crowd Chants") ||
-        line.startsWith("$Optional: Fixed Camera Always") ||
-        line.startsWith("$Optional: Widescreen")
-      )
-    ) {
-      newSettings.push(line)
-    }
-  }
+  // TODO maybe preserve existing settings here, would require parsing file
+  let newSettings = ["[Gecko]", "[Gecko_Enabled]"]
   if (!config.gameMusicOn) newSettings.push("$Optional: Game Music OFF")
   if (config.hideHud) newSettings.push("$Optional: Hide HUD")
   if (config.hideTags) newSettings.push("$Optional: Hide Tags")
@@ -432,6 +415,10 @@ const configureDolphin = async (config) => {
     newSettings.push("$Optional: Prevent Character Crowd Chants")
   if (config.fixedCamera) newSettings.push("$Optional: Fixed Camera Always")
   if (!config.widescreenOff) newSettings.push("$Optional: Widescreen 16:9")
+
+  newSettings.push("[Gecko_Disabled]")
+  if (config.hideNames) newSettings.push("$Optional: Show Player Names")
+
   await fsPromises.writeFile(gameSettingsFilename, newSettings.join("\n"))
 
   // Graphics settings
@@ -544,7 +531,11 @@ const main = () => {
         type: "boolean",
       })
       yargs.option("hide-tags", {
-        describe: "Always hide tags.",
+        describe: "Hide tags.",
+        type: "boolean",
+      })
+      yargs.option("hide-names", {
+        describe: "Hide player names.",
         type: "boolean",
       })
       yargs.option("disable-chants", {
@@ -587,6 +578,7 @@ const main = () => {
     gameMusicOn: argv.gameMusicOn,
     hideHud: argv.hideHud,
     hideTags: argv.hideTags,
+    hideNames: argv.hideNames,
     disableChants: argv.disableChants,
     fixedCamera: argv.fixedCamera,
     widescreenOff: argv.widescreenOff,
