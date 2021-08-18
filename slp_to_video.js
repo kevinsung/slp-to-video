@@ -52,11 +52,20 @@ const generateReplayConfigs = async (replays, basedir) => {
 const generateReplayConfig = async (replay, index, basedir) => {
   const game = new SlippiGame(replay.path)
   const metadata = game.getMetadata()
+  let startFrame = replay.startFrame
+  if (!startFrame && startFrame !== 0) {
+    startFrame = -123
+  }
+  let endFrame = replay.endFrame
+  if (!endFrame && endFrame !== 0) {
+    endFrame = metadata.lastFrame
+  }
+  endFrame = Math.min(endFrame, metadata.lastFrame)
   const config = {
     mode: "normal",
     replay: replay.path,
-    startFrame: replay.startFrame != null ? replay.startFrame : -123,
-    endFrame: replay.endFrame != null ? replay.endFrame : metadata.lastFrame,
+    startFrame,
+    endFrame,
     isRealTimeMode: false,
     commandId: `${crypto.randomBytes(12).toString("hex")}`,
     overlayPath: replay.overlayPath,
