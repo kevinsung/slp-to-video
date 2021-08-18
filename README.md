@@ -3,7 +3,7 @@
 Convert Slippi replay files to video.
 
 Takes sequences of Slippi replay files with optional start and end frames and
-overlay images, and stitches these sequences together, producing AVI video files.
+overlay images, and stitches these sequences together.
 Useful for creating combo videos or converting sets to video.
 See [here](https://github.com/kevinsung/slp-to-video/blob/master/example_input.json)
 for an example of the input file format.

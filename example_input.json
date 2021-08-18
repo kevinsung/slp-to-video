@@ -1,5 +1,5 @@
 [
-    {"outputPath": "set1.avi",
+    {"outputPath": "set1.mp4",
      "queue": [
         {"path": "game1.slp"
         },
@@ -7,7 +7,7 @@
         }
      ]
     },
-    {"outputPath": "combovideo.avi",
+    {"outputPath": "combovideo.mp4",
      "queue": [
         {"path": "clip1.slp",
          "startFrame": 0,
