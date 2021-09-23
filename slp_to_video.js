@@ -24,6 +24,8 @@ const readline = require("readline")
 const dir = require("node-dir")
 const { default: SlippiGame } = require("slp-parser-js")
 
+let NUM_FAIL = 0
+
 const EFB_SCALE = {
   "1x": 2,
   "2x": 4,
@@ -252,8 +254,13 @@ const processReplayConfigs = async (files, config) => {
   promises = []
   files.forEach((file) => {
     const basename = path.join(path.dirname(file), path.basename(file, ".json"))
-    promises.push(fsPromises.unlink(`${basename}.avi`))
-    promises.push(fsPromises.unlink(`${basename}.wav`))
+    promises.push(
+      fsPromises.rm(`${basename}.avi`).catch((err) => {
+        console.warn("Warning: A replay failed to process, skipping")
+        NUM_FAIL += 1
+      })
+    )
+    promises.push(fsPromises.rm(`${basename}.wav`, { force: true }))
   })
   await Promise.all(promises)
 
@@ -269,7 +276,7 @@ const processReplayConfigs = async (files, config) => {
   // Delete non-overlaid video files
   promises = []
   replaysWithOverlays.forEach((basename) => {
-    promises.push(fsPromises.unlink(`${basename}-merged.avi`))
+    promises.push(fsPromises.rm(`${basename}-merged.avi`, { force: true }))
   })
   await Promise.all(promises)
 }
@@ -488,6 +495,11 @@ const slpToVideo = async (replayLists, config) => {
         subdirs,
         config.numProcesses
       )
+      if (NUM_FAIL) {
+        console.warn(
+          `Warning: ${NUM_FAIL} replays failed to process and were skipped.`
+        )
+      }
       console.log("Done.")
     })
     .then(() => fsPromises.rm(config.tmpdir, { recursive: true }))
