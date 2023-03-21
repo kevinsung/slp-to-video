@@ -499,7 +499,7 @@ const slpToVideo = async (replayLists, config) => {
 const main = () => {
   const argv = require("yargs").command(
     "$0 INPUT_FILE",
-    "Convert .slp files to video in AVI format.",
+    "Convert .slp files to video.",
     (yargs) => {
       yargs.positional("INPUT_FILE", {
         describe:

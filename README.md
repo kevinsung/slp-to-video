@@ -40,7 +40,7 @@ npm i
 ```
 node slp_to_video.js INPUT_FILE
 
-Convert .slp files to video in AVI format.
+Convert .slp files to video.
 
 Positionals:
   INPUT_FILE  Describes the input .slp files and output filenames. See
@@ -55,14 +55,15 @@ Options:
   --ssbm-iso-path   Path to the SSBM ISO image.   [string] [default: "SSBM.iso"]
   --game-music-on   Turn game music on.                                [boolean]
   --hide-hud        Hide percentage and stock icons.                   [boolean]
-  --hide-tags       Always hide tags.                                  [boolean]
+  --hide-tags       Hide tags.                                         [boolean]
+  --hide-names      Hide player names.                                 [boolean]
   --disable-chants  Disable character crowd chants.                    [boolean]
   --fixed-camera    Fixed camera mode.                                 [boolean]
   --widescreen-off  Turn off widescreen.                               [boolean]
   --bitrate-kbps    Bitrate in kbps.                   [number] [default: 15000]
   --resolution      Internal resolution multiplier.     [string] [default: "2x"]
   --tmpdir          Temporary directory to use (temporary files may be large).
-                         [string] [default: "/tmp/tmp-2c6dcb94eba38699fdbdf624"]
+                         [string] [default: "/tmp/tmp-2c0591ca28e696ed5e563801"]
 ```
 
 ## Notes
